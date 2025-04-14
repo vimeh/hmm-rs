@@ -16,7 +16,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
-    prelude::{CrosstermBackend, Rect, Size, Terminal},
+    prelude::{CrosstermBackend, Size, Terminal},
     // Remove unused Style, Borders, Paragraph
     // style::Style,
     // widgets::{Borders, Paragraph},
@@ -73,9 +73,12 @@ pub fn run(mut map: MindMap, config: Config) -> Result<(), UiError> {
                 Size::new(80, 24) // Example default size
             }
         };
-        // Explicitly pass the Rect type
-        let layout: HashMap<NodeId, RenderNode> =
-            calculate_layout(&map, &config, terminal_rect as Rect);
+        // We have terminal_rect which is a Size.
+        // We don't need terminal_area anymore as calculate_layout expects Size.
+        // let terminal_area = Rect::new(0, 0, terminal_rect.width, terminal_rect.height);
+
+        // Pass the Size directly to calculate_layout
+        let layout: HashMap<NodeId, RenderNode> = calculate_layout(&map, &config, terminal_rect);
 
         terminal.draw(|frame| draw_ui(frame, &map, &config, &layout, &app_state))?;
 
@@ -86,7 +89,7 @@ pub fn run(mut map: MindMap, config: Config) -> Result<(), UiError> {
                     if key_event.code == KeyCode::Char('q') {
                         break;
                     }
-                    // Pass the Rect to adjust_viewport
+                    // Pass the Size to adjust_viewport (already correctly typed)
                     adjust_viewport(&map, &layout, &mut app_state, terminal_rect);
                 }
                 _ => {} // Ignore other events

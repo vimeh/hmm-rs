@@ -286,7 +286,7 @@ fn build_config_from_args(args: Args) -> Result<Config, ConfigError> {
     };
 
     // Validate keybindings (example validation)
-    for (key, command) in &config.keybindings {
+    for (_key, command) in &config.keybindings {
         // Basic validation: check if command looks reasonable (e.g., exists in a known list)
         // This part needs actual command validation logic based on available commands
         if !is_valid_keybinding_command(command) {
