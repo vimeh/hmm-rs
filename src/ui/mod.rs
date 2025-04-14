@@ -16,10 +16,9 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
-    prelude::{CrosstermBackend, Size, Terminal},
-    // Remove unused Style, Borders, Paragraph
-    // style::Style,
-    // widgets::{Borders, Paragraph},
+    prelude::{CrosstermBackend, Rect, Size, Terminal},
+    style::{Color, Style},
+    widgets::{Block, Borders, Paragraph},
 };
 // use std::collections::HashMap;
 use std::io::{self, Stdout, stdout};
@@ -30,9 +29,10 @@ use std::time::Duration; // Add Duration import back
 use std::collections::HashMap;
 
 pub mod render;
-// pub mod state;
+// pub mod state; // REMOVE state module declaration
 
-use render::{RenderNode, calculate_layout, draw_map}; // Use items from render
+use render::{RenderNode, calculate_layout}; // Removed draw_map
+// use state::TuiState; // DO NOT use TuiState from state module
 
 // Define potential errors during UI operations.
 #[derive(thiserror::Error, Debug)]
@@ -43,17 +43,19 @@ pub enum UiError {
 }
 
 // State specific to the TUI
-struct TuiState {
-    active_node_id: NodeId, // Add active_node_id to TuiState
-    viewport_y: u16,        // Vertical scroll offset
-    viewport_x: u16,        // Horizontal scroll offset
-                            // Add messages, input mode, etc. later
+#[derive(Debug)] // Add Debug derive
+pub struct TuiState {
+    // Keep TuiState definition here
+    pub active_node_id: NodeId, // Make fields public
+    pub viewport_y: u16,        // Vertical scroll offset
+    pub viewport_x: u16,        // Horizontal scroll offset
+                                // Add messages, input mode, etc. later
 }
 
 // Main function to run the TUI application loop.
 pub fn run(mut map: MindMap, config: Config) -> Result<(), UiError> {
     let mut terminal = setup_terminal()?;
-    // Handle Option for map.root
+    // Handle Option for map.root - Use map.root again for initial node
     let initial_active_node = map.root.expect("MindMap must have a root node to run TUI");
     let mut app_state = TuiState {
         active_node_id: initial_active_node,
@@ -78,7 +80,12 @@ pub fn run(mut map: MindMap, config: Config) -> Result<(), UiError> {
         // let terminal_area = Rect::new(0, 0, terminal_rect.width, terminal_rect.height);
 
         // Pass the Size directly to calculate_layout
-        let layout: HashMap<NodeId, RenderNode> = calculate_layout(&map, &config, terminal_rect);
+        let layout: HashMap<NodeId, RenderNode> = calculate_layout(
+            &map,
+            &config,
+            terminal_rect,
+            app_state.active_node_id, // Pass active_node_id again
+        );
 
         terminal.draw(|frame| draw_ui(frame, &map, &config, &layout, &app_state))?;
 
@@ -283,22 +290,49 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result
 // Draw the complete UI
 fn draw_ui(
     frame: &mut ratatui::Frame,
-    map: &MindMap,
-    config: &Config,
+    _map: &MindMap,   // Marked as unused for now
+    _config: &Config, // Marked as unused for now
     layout: &HashMap<NodeId, RenderNode>,
     state: &TuiState,
 ) {
-    // Use frame.area() which returns Rect
-    let area = frame.area();
-    // Draw the map content using the area (Rect)
-    draw_map(
-        frame,
-        layout,
-        config,
-        area,
-        state.viewport_y,
-        state.viewport_x,
-        map,
-    );
-    // TODO: Draw other UI elements like status bar, help message, etc.
+    let viewport = frame.size();
+    frame.render_widget(Block::default().borders(Borders::NONE), viewport); // Clear background (optional)
+
+    // Iterate through the calculated layout and draw each node
+    for (_node_id, render_node) in layout {
+        // Calculate the draw position considering the viewport offset
+        let draw_x = render_node.x.saturating_sub(state.viewport_x);
+        let draw_y = render_node.y.saturating_sub(state.viewport_y);
+
+        // Check if the node is within the visible area
+        if draw_x < viewport.width && draw_y < viewport.height {
+            let node_area = Rect::new(
+                draw_x,
+                draw_y,
+                render_node.w.min(viewport.width.saturating_sub(draw_x)), // Clamp width
+                render_node.h.min(viewport.height.saturating_sub(draw_y)), // Clamp height
+            );
+
+            // Don't render if area is zero
+            if node_area.width == 0 || node_area.height == 0 {
+                continue;
+            }
+
+            // Basic styling: add border and set color for active node
+            let node_style = if state.active_node_id == render_node.id {
+                Style::default().fg(Color::Yellow) // Highlight active node
+            } else {
+                Style::default()
+            };
+
+            let paragraph = Paragraph::new(render_node.display_title.clone())
+                .style(node_style)
+                .block(Block::default().borders(Borders::ALL));
+
+            frame.render_widget(paragraph, node_area);
+        }
+    }
+
+    // TODO: Draw connecting lines
+    // TODO: Draw status bar/messages
 }

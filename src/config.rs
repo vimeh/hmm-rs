@@ -1,8 +1,13 @@
 use clap::Parser;
 use config::{
-    /* Config as ConfigCrate, */
-    ConfigError as ConfigCrateError, /* File, FileFormat */ /* Value, */
-                                    /* ValueKind, */
+    Config as ConfigCrate, // Need this for builder
+    ConfigError as ConfigCrateError,
+    Environment,
+    File,
+    Map,
+    Source,
+    Value,
+    ValueKind,
 };
 use serde::{Deserialize /*, Serialize */};
 use std::{collections::HashMap, path::PathBuf};
@@ -160,48 +165,64 @@ struct Args {
 
 // Function to load configuration from all sources.
 pub fn load_config() -> Result<Config, ConfigError> {
-    // Parse command line arguments using clap.
     let args = Args::parse();
-    // Now call the build function which handles layering
-    build_config_from_args(args)
+
+    // Build environment source separately
+    let env_source = Environment::with_prefix("HMM").separator("__");
+    // Collect environment settings into a map. We ignore errors here,
+    // as missing env vars are fine, but collect can fail for other reasons.
+    // A more robust solution might handle this error.
+    let env_map: Map<String, Value> = env_source.collect().unwrap_or_else(|_| Map::new());
+
+    // Now call the build function, passing the collected env map as overrides
+    build_config_from_args(args, Some(env_map))
 }
 
-// Separate function to allow testing with specific args
-fn build_config_from_args(args: Args) -> Result<Config, ConfigError> {
+// Separate function to allow testing with specific args and override sources
+fn build_config_from_args(
+    args: Args,
+    override_source: Option<Map<String, Value>>,
+) -> Result<Config, ConfigError> {
     // 1. Determine config file path
-    let config_file_path = args.config.clone().or_else(|| {
-        // Standard config directory
-        dirs::config_dir().map(|dir| dir.join("hmm-rs").join("config.toml")) // Assuming TOML format
-    });
+    let config_file_path = args
+        .config
+        .clone()
+        .or_else(|| dirs::config_dir().map(|dir| dir.join("hmm-rs").join("config.toml")));
 
-    // 2. Load defaults (keybindings are handled later)
-    let _defaults = FileConfig::default(); // Prefix unused variable
-
-    // 3. Build configuration source using the `config` crate
-    let mut config_builder = config::Config::builder();
+    // 2. Build configuration source using the `config` crate
+    let mut config_builder = ConfigCrate::builder();
 
     // Layer on config file if path is determined and file exists
     if let Some(ref path) = config_file_path {
-        config_builder =
-            config_builder.add_source(config::File::from(path.clone()).required(false));
+        config_builder = config_builder.add_source(File::from(path.clone()).required(false));
     }
 
-    // Layer on environment variables (e.g., HMM_MAX_UNDO_STEPS)
-    config_builder =
-        config_builder.add_source(config::Environment::with_prefix("HMM").separator("__"));
+    // Layer on the provided override source (e.g., environment or test map)
+    // by applying each key-value pair individually with high priority.
+    if let Some(overrides) = override_source {
+        for (key, value) in overrides {
+            // Use set_override to apply these with higher priority than the file source
+            // set_override returns the builder, so we reassign it.
+            // It requires the key as &str.
+            config_builder = config_builder.set_override(&key, value)?;
+        }
+    }
 
     // Deserialize into FileConfig, propagating errors
+    // This now reflects File -> Overrides applied via set_override
     let loaded_sources: FileConfig = config_builder.build()?.try_deserialize()?;
 
-    // 4. Layer the configurations: args > env/file (loaded_sources) > defaults
-    // Note: `loaded_sources` already combines file and env based on `config` crate's layering.
-    // We prioritize command-line args (`args`) over everything else.
+    // 4. Layer the configurations: args > overrides > file > defaults
+    // The layering is now handled by the order of operations:
+    // - Defaults are inherent in unwrap_or.
+    // - File is added first to builder.
+    // - Overrides (env/test map) are applied via set_override (higher priority than file).
+    // - Args are checked first in the final Config construction.
     let config = Config {
         filename: args.filename, // Only comes from args
         default_file: args
-            .default_file // CLI arg for default file
-            .or(loaded_sources.default_file), // Then config file/env
-        // No final default needed as it's Option<String>
+            .default_file // CLI arg first
+            .or(loaded_sources.default_file), // Then merged overrides/file
         max_parent_node_width: args
             .max_parent_node_width
             .or(loaded_sources.max_parent_node_width)
@@ -212,7 +233,7 @@ fn build_config_from_args(args: Args) -> Result<Config, ConfigError> {
             .unwrap_or(DEFAULT_MAX_LEAF_WIDTH),
         line_spacing: args
             .line_spacing
-            .or(loaded_sources.line_spacing)
+            .or(loaded_sources.line_spacing) // This now checks args -> overrides/file -> default
             .unwrap_or(DEFAULT_LINE_SPACING),
         align_levels: args
             .align_levels
@@ -280,7 +301,7 @@ fn build_config_from_args(args: Args) -> Result<Config, ConfigError> {
             .or(loaded_sources.auto_save)
             .unwrap_or(DEFAULT_AUTO_SAVE),
         echo_keys: args.echo_keys.or(loaded_sources.echo_keys).unwrap_or(false),
-        keybindings: loaded_sources // Keybindings come only from file/env/defaults for now
+        keybindings: loaded_sources // Keybindings come from merged overrides/file/defaults
             .keybindings
             .unwrap_or_else(get_default_keybindings),
     };
@@ -411,92 +432,78 @@ pub fn get_mind_map_path(cli_file: Option<String>, config: &Config) -> Option<Pa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
-    use std::fs;
-    use tempfile::tempdir;
+    use clap::Parser;
+    use config::{Map, Value, ValueKind};
+    use std::path::PathBuf; // Import ValueKind for string conversion
 
     // Helper to create Args for testing
     fn test_args(filename: Option<&str>, config_path: Option<&str>) -> Args {
-        Args::try_parse_from(
-            [
-                "test_binary", // Program name, required by clap
-                filename.unwrap_or(""),
-                config_path
-                    .map(|p| format!("--config={}", p))
-                    .unwrap_or("".to_string())
-                    .as_str(),
-                // Add other args as needed, filter out empty strings
-            ]
-            .iter()
-            .filter(|s| !s.is_empty()),
-        )
-        .unwrap_or_else(|e| panic!("Failed to parse test args: {}", e))
-    }
-
-    // Helper to set env var for duration of a test
-    struct EnvVarGuard {
-        key: String,
-        original_value: Option<String>,
-    }
-
-    impl EnvVarGuard {
-        fn set(key: &str, value: &str) -> Self {
-            let key = key.to_string();
-            let original_value = env::var(&key).ok();
-            // SAFETY: Modifying env vars is unsafe due to potential race conditions
-            // in multi-threaded contexts. These tests run sequentially, so it's safe here.
-            unsafe {
-                env::set_var(&key, value);
-            }
-            EnvVarGuard {
-                key,
-                original_value,
-            }
+        let mut cmd = vec!["test_binary"];
+        if let Some(f) = filename {
+            cmd.push(f);
         }
-    }
-
-    impl Drop for EnvVarGuard {
-        fn drop(&mut self) {
-            // SAFETY: See above.
-            unsafe {
-                if let Some(ref val) = self.original_value {
-                    env::set_var(&self.key, val);
-                } else {
-                    env::remove_var(&self.key);
-                }
-            }
+        if let Some(c) = config_path {
+            cmd.push("--config");
+            cmd.push(c);
         }
+        Args::try_parse_from(cmd).expect("Failed to parse test args")
     }
 
     #[test]
     fn test_default_config() {
-        // Pass empty args to simulate no command line input
         let args = test_args(None, None);
-        let config = build_config_from_args(args).expect("Failed to load default config");
+        let config = build_config_from_args(args, None).expect("Failed to load default config");
 
-        assert_eq!(config.line_spacing, DEFAULT_LINE_SPACING);
-        assert_eq!(config.clipboard, DEFAULT_CLIPBOARD_MODE);
-        assert_eq!(config.keybindings.get("q").unwrap(), "quit");
-        assert!(config.filename.is_none());
+        assert_eq!(
+            config.line_spacing, DEFAULT_LINE_SPACING,
+            "Default line_spacing mismatch"
+        );
+        assert_eq!(
+            config.clipboard, DEFAULT_CLIPBOARD_MODE,
+            "Default clipboard mode mismatch"
+        );
+        assert_eq!(
+            config.keybindings.get("q").unwrap(),
+            "quit",
+            "Default keybinding mismatch"
+        );
+        assert!(config.filename.is_none(), "Default filename should be None");
     }
 
     #[test]
     fn test_env_override() {
-        let _guard = EnvVarGuard::set("HMM__LINE_SPACING", "5");
-        let _guard2 = EnvVarGuard::set("HMM__CLIPBOARD", "internal");
+        // Create a map simulating environment variables
+        // Keys should be lowercase as per config::Environment defaults
+        let mut override_map = Map::new();
+        // Ensure values are of the correct type config::Value expects
+        override_map.insert(
+            "line_spacing".to_string(),
+            Value::new(None, ValueKind::U64(5)),
+        );
+        override_map.insert(
+            "clipboard".to_string(),
+            Value::new(None, ValueKind::String("internal".to_string())),
+        );
+        // Note: MAX_UNDO_STEPS is not overridden here, so it should remain default
 
-        // Pass empty args
         let args = test_args(None, None);
-        let config = build_config_from_args(args).expect("Failed to load config with env");
+        // Pass the simulated env map as the override source
+        let config = build_config_from_args(args, Some(override_map))
+            .expect("Failed to load config with simulated env");
 
-        assert_eq!(config.line_spacing, 5);
-        assert_eq!(config.clipboard, "internal");
-        assert_eq!(config.max_undo_steps, DEFAULT_MAX_UNDO); // Ensure others remain default
+        assert_eq!(config.line_spacing, 5, "Env override line_spacing failed");
+        assert_eq!(
+            config.clipboard, "internal",
+            "Env override clipboard failed"
+        );
+        assert_eq!(
+            config.max_undo_steps, DEFAULT_MAX_UNDO,
+            "Env override affected unrelated default"
+        );
     }
 
     #[test]
     fn test_arg_override() {
-        // Simulate passing a filename and another arg via command line
         let args = Args::try_parse_from([
             "test_binary",
             "my_map.hmm",
@@ -505,15 +512,12 @@ mod tests {
         ])
         .expect("Failed to parse specific args");
 
-        let config = build_config_from_args(args).expect("Failed to build config from args");
+        let config = build_config_from_args(args, None).expect("Failed to build config from args");
 
         assert_eq!(config.filename, Some(PathBuf::from("my_map.hmm")));
         assert_eq!(config.line_spacing, 10);
         assert_eq!(config.clipboard, "file");
     }
-
-    // Test config file loading requires creating a temporary file.
-    // Skipping for simplicity. Need tempfile crate and mock fs potentially.
 }
 
 /// Validates the loaded configuration for required fields and consistency.

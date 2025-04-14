@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::core::{MindMap, NodeId};
-use ratatui::prelude::{Frame, Rect};
+use ratatui::prelude::{Frame, Rect, Size};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use std::collections::HashMap;
@@ -24,17 +24,17 @@ struct LayoutCalcNode {
     is_visible: bool,
 }
 
-/// Represents calculated layout information for rendering a node.
+/// Represents a node with calculated layout information for rendering.
 #[derive(Debug, Clone)]
 pub struct RenderNode {
     pub id: NodeId,
-    pub display_text: String,
+    pub display_title: String,
     pub x: u16,
     pub y: u16,
     pub w: u16,
     pub h: u16,
-    pub subtree_h: u16,
-    pub is_leaf: bool,
+    pub is_active: bool,
+    // Add more fields later, like children, collapsed status, etc.
 }
 
 /// Calculates the layout for all visible nodes in the mind map.
@@ -42,7 +42,8 @@ pub struct RenderNode {
 pub fn calculate_layout(
     map: &MindMap,
     config: &Config,
-    _area: ratatui::layout::Size, // Change Rect to Size, parameter currently unused
+    _area: Size,            // Parameter currently unused
+    active_node_id: NodeId, // Add active_node_id parameter
 ) -> HashMap<NodeId, RenderNode> {
     let mut calc_nodes: HashMap<NodeId, LayoutCalcNode> = HashMap::new();
     let root_id = match map.root {
@@ -50,59 +51,58 @@ pub fn calculate_layout(
         None => return HashMap::new(), // Return empty layout if no root
     };
 
-    // --- Pass 1: Calculate node dimensions (w, h) and filter visible children ---
-    calculate_dimensions_recursive(map, config, root_id, &mut calc_nodes, true);
+    // --- Pass 1: Calculate node dimensions (w, h) ---
+    calculate_dimensions_recursive(map, config, root_id, &mut calc_nodes);
 
-    // --- Pass 2: Calculate subtree heights (bottom-up) ---
+    // --- Pass 2: Calculate subtree heights (TODO) ---
     calculate_subtree_height_recursive(map, config, root_id, &mut calc_nodes);
 
-    // --- Pass 3: Calculate X and Y positions (top-down) ---
-    // Need to handle the root node specially as it has no parent positioning it.
-    if let Some(root_calc_node) = calc_nodes.get_mut(&root_id) {
-        root_calc_node.x = 1; // Start root at x=1
-        root_calc_node.y = 0; // Start root at y=0
+    // --- Pass 3: Calculate X and Y positions (TODO) ---
+    // For now, use placeholder positions
+    let mut current_y = 0;
+    for (id, calc_node) in calc_nodes.iter_mut() {
+        calc_node.x = 1; // Dummy X
+        calc_node.y = current_y; // Dummy Y, stacking vertically
+        current_y += calc_node.h + config.line_spacing as u16;
     }
-    calculate_position_recursive(map, config, root_id, &mut calc_nodes);
 
     // --- Convert LayoutCalcNode to RenderNode ---
     let mut render_map = HashMap::new();
     for (id, calc_node) in calc_nodes {
-        if calc_node.is_visible {
-            // Only include visible nodes in the final render map
-            render_map.insert(
-                id,
-                RenderNode {
-                    id: calc_node.id,
-                    display_text: calc_node.wrapped_text,
-                    x: calc_node.x,
-                    y: calc_node.y,
-                    w: calc_node.w,
-                    h: calc_node.h,
-                    subtree_h: calc_node.subtree_h,
-                    is_leaf: calc_node.is_leaf,
-                },
-            );
-        }
+        // if calc_node.is_visible { // TODO: Add visibility check later
+        render_map.insert(
+            id,
+            RenderNode {
+                id: calc_node.id,
+                display_title: calc_node.wrapped_text.clone(),
+                x: calc_node.x,
+                y: calc_node.y,
+                w: calc_node.w,
+                h: calc_node.h,
+                is_active: id == active_node_id,
+            },
+        );
+        // }
     }
 
     render_map
 }
 
-// Pass 1: Calculate w, h for each node and determine visible children
+// Pass 1: Calculate w, h for each node
 fn calculate_dimensions_recursive(
     map: &MindMap,
     config: &Config,
     node_id: NodeId,
     calc_nodes: &mut HashMap<NodeId, LayoutCalcNode>,
-    parent_is_visible: bool,
+    // parent_is_visible: bool, // Add later for visibility
 ) {
     if calc_nodes.contains_key(&node_id) {
-        // Avoid redundant calculations if visited via different paths (shouldn't happen with tree)
+        // Avoid redundant calculations
         return;
     }
 
     if let Some(node) = map.get_node(node_id) {
-        let is_visible = parent_is_visible;
+        // let is_visible = parent_is_visible && !node.hidden; // Add later
 
         let is_leaf = node.children.is_empty();
         let max_width = if is_leaf {
@@ -111,27 +111,22 @@ fn calculate_dimensions_recursive(
             config.max_parent_node_width
         } as usize;
 
+        // Perform text wrapping
         let wrapped_lines: Vec<String> = wrap(&node.text, max_width)
             .iter()
             .map(|s| s.to_string())
             .collect();
 
         let wrapped_text = wrapped_lines.join("\n");
+        // Calculate width based on longest wrapped line + padding/border
         let w = wrapped_lines
             .iter()
             .map(|line| UnicodeWidthStr::width(line.as_str()))
             .max()
             .unwrap_or(0) as u16
             + 2; // +2 for padding/border
-        let h = wrapped_lines.len() as u16;
-
-        // Filter visible children for later passes
-        let mut visible_children = Vec::new();
-        for child_id in &node.children {
-            if let Some(_child_node) = map.get_node(*child_id) {
-                visible_children.push(*child_id);
-            }
-        }
+        // Calculate height based on number of lines
+        let h = wrapped_lines.len().max(1) as u16; // Ensure height is at least 1
 
         calc_nodes.insert(
             node_id,
@@ -139,21 +134,21 @@ fn calculate_dimensions_recursive(
                 id: node_id,
                 text: node.text.clone(),
                 children: node.children.clone(),
-                visible_children: visible_children.clone(), // Store visible children
+                visible_children: Vec::new(), // Placeholder, will be filled later
                 w,
                 h,
-                subtree_h: 0, // Calculated in pass 2
-                x: 0,         // Calculated in pass 3
-                y: 0,         // Calculated in pass 3
+                subtree_h: 0, // Placeholder, will be filled later
+                x: 0,         // Placeholder
+                y: 0,         // Placeholder
                 wrapped_text,
-                is_leaf: node.children.is_empty(),
-                is_visible,
+                is_leaf,
+                is_visible: true, // Placeholder, will be filled later
             },
         );
 
-        // Recurse for all children, passing down visibility status
+        // Recurse for all children
         for child_id in &node.children {
-            calculate_dimensions_recursive(map, config, *child_id, calc_nodes, is_visible);
+            calculate_dimensions_recursive(map, config, *child_id, calc_nodes);
         }
     }
 }
@@ -302,7 +297,7 @@ pub fn draw_map(
                 Style::default().fg(Color::White).bg(Color::Blue)
             };
 
-            let paragraph = Paragraph::new(render_node.display_text.clone())
+            let paragraph = Paragraph::new(render_node.display_title.clone())
                 .style(node_style)
                 .block(Block::default().borders(Borders::ALL))
                 .wrap(ratatui::widgets::Wrap { trim: true });
