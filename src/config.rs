@@ -482,8 +482,8 @@ mod tests {
 
     #[test]
     fn test_env_override() {
-        let _guard = EnvVarGuard::set("HMM_LINE_SPACING", "5");
-        let _guard2 = EnvVarGuard::set("HMM_CLIPBOARD", "internal");
+        let _guard = EnvVarGuard::set("HMM__LINE_SPACING", "5");
+        let _guard2 = EnvVarGuard::set("HMM__CLIPBOARD", "internal");
 
         // Pass empty args
         let args = test_args(None, None);

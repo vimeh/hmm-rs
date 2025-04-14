@@ -25,6 +25,14 @@ fn main() -> AppResult<()> {
     let mut map = load_map_json(&map_path)?;
     let mut modified = false;
 
+    // Ensure the map has a root node before starting TUI or performing operations
+    if map.root.is_none() {
+        println!("Mind map file not found or empty, creating default root node.");
+        // Add a default root node if the map is empty
+        map.add_node("Root".to_string(), None)?;
+        modified = true; // Mark as modified since we added the root
+    }
+
     match cli.command {
         Some(command) => match command {
             Commands::Add { parent_id, text } => {
