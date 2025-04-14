@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use clap::Parser;
 use config::{
     Config as ConfigCrate, // Need this for builder
@@ -7,7 +8,6 @@ use config::{
     Map,
     Source,
     Value,
-    ValueKind,
 };
 use serde::{Deserialize /*, Serialize */};
 use std::{collections::HashMap, path::PathBuf};

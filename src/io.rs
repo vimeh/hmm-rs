@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::core::{MindMap, NodeId};
 use crate::errors::AppResult;
 use serde_json;

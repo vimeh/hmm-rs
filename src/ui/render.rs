@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::config::Config;
 use crate::core::{MindMap, NodeId};
 use ratatui::prelude::{Frame, Rect, Size};

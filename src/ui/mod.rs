@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // use crate::commands::{self, InsertMode}; // Import commands
 use crate::config::Config; // Add Config import back
 use crate::core::{MindMap, NodeId};
