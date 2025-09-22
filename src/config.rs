@@ -9,7 +9,7 @@ use config::{
     Source,
     Value,
 };
-use serde::{Deserialize /*, Serialize */};
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 use thiserror::Error;
 
@@ -77,7 +77,7 @@ struct FileConfig {
 
 // Final Config struct, combining all sources.
 // Fields are non-optional as they will always have a value (default or overridden).
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub default_file: Option<String>,
     pub filename: Option<PathBuf>, // From command line argument
@@ -103,6 +103,38 @@ pub struct Config {
     pub auto_save: bool,
     pub echo_keys: bool,
     pub keybindings: HashMap<String, String>, // Parsed keybindings
+}
+
+// Implement Default trait manually
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            default_file: None,
+            filename: None,
+            max_parent_node_width: DEFAULT_MAX_PARENT_WIDTH,
+            max_leaf_node_width: DEFAULT_MAX_LEAF_WIDTH,
+            line_spacing: DEFAULT_LINE_SPACING,
+            align_levels: DEFAULT_ALIGN_LEVELS,
+            symbol1: "✓".to_string(), // Provide sensible string defaults
+            symbol2: "✗".to_string(),
+            show_hidden: false,
+            initial_depth: DEFAULT_INITIAL_DEPTH,
+            center_lock: DEFAULT_CENTER_LOCK,
+            focus_lock: DEFAULT_FOCUS_LOCK,
+            max_undo_steps: DEFAULT_MAX_UNDO,
+            active_node_color: DEFAULT_ACTIVE_COLOR.to_string(),
+            message_color: DEFAULT_MESSAGE_COLOR.to_string(),
+            doubt_color: None,                   // No default doubt color
+            post_export_command: "".to_string(), // Empty default
+            clipboard: DEFAULT_CLIPBOARD_MODE.to_string(),
+            clipboard_file: DEFAULT_CLIPBOARD_FILE.to_string(),
+            clipboard_in_command: "".to_string(), // Empty default
+            clipboard_out_command: "".to_string(), // Empty default
+            auto_save: DEFAULT_AUTO_SAVE,
+            echo_keys: false,
+            keybindings: get_default_keybindings(), // Use default keybindings
+        }
+    }
 }
 
 // Command line arguments defined using clap.

@@ -27,10 +27,15 @@ fn main() -> AppResult<()> {
 
     // Ensure the map has a root node before starting TUI or performing operations
     if map.root.is_none() {
-        println!("Mind map file not found or empty, creating default root node.");
+        println!("Mind map file not found or empty, creating default map.");
         // Add a default root node if the map is empty
-        map.add_node("Root".to_string(), None)?;
-        modified = true; // Mark as modified since we added the root
+        let root_id = map.add_node("Root".to_string(), None)?;
+        // Add some default children for testing layout
+        let child1_id = map.add_node("Child 1".to_string(), Some(root_id))?;
+        map.add_node("Grandchild 1.1".to_string(), Some(child1_id))?;
+        map.add_node("Child 2 has longer text".to_string(), Some(root_id))?;
+
+        modified = true; // Mark as modified since we added the default map
     }
 
     match cli.command {

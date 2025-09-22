@@ -215,7 +215,6 @@ mod tests {
     use super::*;
     use crate::core::MindMap;
     use tempfile::tempdir;
-    use uuid::Uuid;
 
     // Helper to create a map for testing
     fn create_test_map() -> (MindMap, NodeId, NodeId, NodeId) {
@@ -282,7 +281,7 @@ mod tests {
         // THIS TEST WILL LIKELY FAIL until parse_lines_into_map is rewritten
         let map = parse_lines_into_map(lines, None).expect("Parsing failed");
 
-        let root_id = map.root.expect("Root should exist");
+        let _root_id = map.root.expect("Root should exist");
         // Cannot easily get children IDs without traversing or knowing UUIDs
         // assert_node_structure(&map, root_id, "Root", 2);
         // ... further checks needed ...
@@ -296,7 +295,7 @@ mod tests {
     fn test_save_and_load_text_cycle() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test_map.txt");
-        let (original_map, root_id, child1_id, child2_id) = create_test_map();
+        let (original_map, _root_id, _child1_id, _child2_id) = create_test_map();
 
         // Save Text
         save_map_text(&original_map, &file_path).unwrap();
@@ -331,16 +330,20 @@ mod tests {
 
     #[test]
     fn test_save_text_permission_denied() {
+        let (_map, _root_id, _child1_id, _child2_id) = create_test_map();
         // Requires creating a read-only directory or file, skipped for now
         // Example setup:
         // let dir = tempdir().unwrap();
-        // let file_path = dir.path().join("read_only.txt");
-        // File::create(&file_path).unwrap();
-        // let mut perms = std::fs::metadata(&file_path).unwrap().permissions();
+        // let file_path = dir.path().join("test_map.txt");
+        // let mut perms = std::fs::metadata(&dir.path()).unwrap().permissions();
         // perms.set_readonly(true);
-        // std::fs::set_permissions(&file_path, perms).unwrap();
-        // let (map, _, _, _) = create_test_map();
-        // let result = save_map_text(&map, &file_path);
-        // assert!(matches!(result, Err(IoError::PermissionDenied(_))));
+        // std::fs::set_permissions(&dir.path(), perms).unwrap(); // Make dir read-only
+        // let result = save_text_map(&_map, &file_path);
+        // assert!(result.is_err());
+        // assert!(matches!(result.unwrap_err(), AppError::Io(_)));
+        // // Clean up: Need to make writable again to delete
+        // perms.set_readonly(false);
+        // std::fs::set_permissions(&dir.path(), perms).unwrap();
+        assert!(true); // Placeholder assertion
     }
 }

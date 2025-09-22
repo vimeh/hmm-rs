@@ -19,7 +19,7 @@ use crossterm::{
 use ratatui::{
     prelude::{CrosstermBackend, Rect, Size, Terminal},
     style::{Color, Style},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Wrap},
 };
 // use std::collections::HashMap;
 use std::io::{self, Stdout, stdout};
@@ -28,6 +28,7 @@ use std::time::Duration; // Add Duration import back
 // use std::thread;
 // use std::time::{Duration, Instant};
 use std::collections::HashMap;
+use std::fs; // Add fs import
 
 pub mod render;
 // pub mod state; // REMOVE state module declaration
@@ -168,7 +169,8 @@ fn handle_key_event(
                     // if let Some(parent_id) = node.parent {
                     //     state.active_node_id = parent_id;
                     // }
-                    println!("Enter on leaf node {} (no action)", node.id);
+                    // println!("Enter on leaf node {} (no action)", node.id);
+                    // No action needed for leaf nodes on Enter
                 }
             }
         }
@@ -296,7 +298,18 @@ fn draw_ui(
     layout: &HashMap<NodeId, RenderNode>,
     state: &TuiState,
 ) {
-    let viewport = frame.size();
+    // Debugging: Write state to file
+    let debug_info = format!(
+        "Viewport: {:?}\nActive Node: {}\nViewport Offset: (x={}, y={})\nLayout: {:#?}",
+        frame.area(),
+        state.active_node_id,
+        state.viewport_x,
+        state.viewport_y,
+        layout
+    );
+    let _ = fs::write("debug_output.txt", debug_info); // Ignore write error for simplicity
+
+    let viewport = frame.area();
     frame.render_widget(Block::default().borders(Borders::NONE), viewport); // Clear background (optional)
 
     // Iterate through the calculated layout and draw each node
@@ -328,7 +341,8 @@ fn draw_ui(
 
             let paragraph = Paragraph::new(render_node.display_title.clone())
                 .style(node_style)
-                .block(Block::default().borders(Borders::ALL));
+                .block(Block::default().borders(Borders::ALL))
+                .wrap(Wrap { trim: false });
 
             frame.render_widget(paragraph, node_area);
         }
