@@ -1,0 +1,32 @@
+Rust Mind Map Tool
+	Features
+		✓ Terminal-based interface
+		✓ Keyboard navigation
+		✓ Node editing
+		✓ Collapsible nodes
+		File operations
+			Save
+			Load
+			Export HTML
+			Export Text
+		Clipboard support
+			Yank
+			Paste
+	Architecture
+		Core modules
+			model.rs - Data structures
+			app.rs - Application state
+			config.rs - Configuration
+			parser.rs - File parsing
+		UI modules
+			ui.rs - Rendering
+			layout.rs - Layout engine
+			event.rs - Event handling
+		Actions
+			Movement
+			Editing
+			View control
+	TODO
+		[HIDDEN] Implement auto-save
+		Improve clipboard integration
+		Add more export formats

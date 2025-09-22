@@ -4,3 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.100"
+clap = { version = "4.5.48", features = ["derive"] }
+clipboard = "0.5.0"
+config = "0.15.16"
+crossterm = "0.29.0"
+directories = "6.0.0"
+indextree = "4.7.4"
+ratatui = "0.29.0"
+serde = { version = "1.0.226", features = ["derive"] }
+unicode-width = "0.2.0"
