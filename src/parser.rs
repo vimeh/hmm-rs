@@ -137,3 +137,148 @@ pub fn map_to_list(
 
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_empty_content() {
+        let result = parse_hmm_content("").unwrap();
+        let (tree, root_id) = result;
+
+        assert_eq!(tree.count(), 1);
+        assert_eq!(tree.get(root_id).unwrap().get().title, "New Mind Map");
+    }
+
+    #[test]
+    fn test_parse_single_node() {
+        let content = "Root Node";
+        let (tree, root_id) = parse_hmm_content(content).unwrap();
+
+        // Parser creates synthetic root but uses the single node as root
+        assert_eq!(tree.count(), 2); // synthetic root + actual node
+        assert_eq!(tree.get(root_id).unwrap().get().title, "Root Node");
+    }
+
+    #[test]
+    fn test_parse_simple_tree() {
+        let content = "Root\n\tChild 1\n\tChild 2\n\t\tGrandchild";
+        let (tree, root_id) = parse_hmm_content(content).unwrap();
+
+        // Parser creates synthetic root + 4 actual nodes
+        assert_eq!(tree.count(), 5);
+        assert_eq!(tree.get(root_id).unwrap().get().title, "Root");
+
+        let children: Vec<_> = root_id.children(&tree).collect();
+        assert_eq!(children.len(), 2);
+
+        let child1 = children[0];
+        assert_eq!(tree.get(child1).unwrap().get().title, "Child 1");
+
+        let child2 = children[1];
+        assert_eq!(tree.get(child2).unwrap().get().title, "Child 2");
+
+        let grandchildren: Vec<_> = child2.children(&tree).collect();
+        assert_eq!(grandchildren.len(), 1);
+        assert_eq!(tree.get(grandchildren[0]).unwrap().get().title, "Grandchild");
+    }
+
+    #[test]
+    fn test_parse_with_bullets() {
+        let content = "Root\n\t* Child with asterisk\n\t- Child with dash";
+        let (tree, root_id) = parse_hmm_content(content).unwrap();
+
+        // Parser creates synthetic root + 3 actual nodes
+        assert_eq!(tree.count(), 4);
+
+        let children: Vec<_> = root_id.children(&tree).collect();
+        assert_eq!(children.len(), 2);
+        assert_eq!(tree.get(children[0]).unwrap().get().title, "Child with asterisk");
+        assert_eq!(tree.get(children[1]).unwrap().get().title, "Child with dash");
+    }
+
+    #[test]
+    fn test_parse_with_spaces_indentation() {
+        let content = "Root\n  Child 1\n    Grandchild\n  Child 2";
+        let (tree, root_id) = parse_hmm_content(content).unwrap();
+
+        // Parser creates synthetic root + 4 actual nodes
+        assert_eq!(tree.count(), 5);
+        assert_eq!(tree.get(root_id).unwrap().get().title, "Root");
+    }
+
+    #[test]
+    fn test_parse_multiple_roots() {
+        let content = "Root 1\nRoot 2\n\tChild of Root 2";
+        let (tree, root_id) = parse_hmm_content(content).unwrap();
+
+        // Should create a synthetic root
+        assert_eq!(tree.get(root_id).unwrap().get().title, "root");
+
+        let roots: Vec<_> = root_id.children(&tree).collect();
+        assert_eq!(roots.len(), 2);
+        assert_eq!(tree.get(roots[0]).unwrap().get().title, "Root 1");
+        assert_eq!(tree.get(roots[1]).unwrap().get().title, "Root 2");
+    }
+
+    #[test]
+    fn test_round_trip() {
+        let original = "Root\n\tChild 1\n\t\tGrandchild 1\n\tChild 2\n\t\tGrandchild 2";
+        let (tree, root_id) = parse_hmm_content(original).unwrap();
+
+        let exported = map_to_list(&tree, root_id, false, 0);
+        let (tree2, root_id2) = parse_hmm_content(&exported).unwrap();
+
+        // Compare tree structures
+        assert_eq!(tree.count(), tree2.count());
+        assert_eq!(
+            tree.get(root_id).unwrap().get().title,
+            tree2.get(root_id2).unwrap().get().title
+        );
+    }
+
+    #[test]
+    fn test_parse_with_empty_lines() {
+        let content = "Root\n\n\tChild 1\n\n\n\tChild 2";
+        let (tree, root_id) = parse_hmm_content(content).unwrap();
+
+        // Parser creates synthetic root + 3 actual nodes
+        assert_eq!(tree.count(), 4);
+        let children: Vec<_> = root_id.children(&tree).collect();
+        assert_eq!(children.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_with_unicode() {
+        let content = "Root ✓\n\t子节点 🎯\n\t✗ Failed node";
+        let (tree, root_id) = parse_hmm_content(content).unwrap();
+
+        // Parser creates synthetic root + 3 actual nodes
+        assert_eq!(tree.count(), 4);
+        assert_eq!(tree.get(root_id).unwrap().get().title, "Root ✓");
+
+        let children: Vec<_> = root_id.children(&tree).collect();
+        assert_eq!(tree.get(children[0]).unwrap().get().title, "子节点 🎯");
+        assert_eq!(tree.get(children[1]).unwrap().get().title, "✗ Failed node");
+    }
+
+    #[test]
+    fn test_save_file_creates_correct_format() {
+        use tempfile::NamedTempFile;
+
+        let mut tree = Arena::new();
+        let root = tree.new_node(Node::new("Root".to_string()));
+        let child1 = tree.new_node(Node::new("Child 1".to_string()));
+        let child2 = tree.new_node(Node::new("Child 2".to_string()));
+
+        root.append(child1, &mut tree);
+        root.append(child2, &mut tree);
+
+        let temp_file = NamedTempFile::new().unwrap();
+        save_file(&tree, root, temp_file.path()).unwrap();
+
+        let content = std::fs::read_to_string(temp_file.path()).unwrap();
+        assert_eq!(content, "Root\n\tChild 1\n\tChild 2\n");
+    }
+}

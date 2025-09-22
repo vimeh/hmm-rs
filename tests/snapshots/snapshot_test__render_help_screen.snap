@@ -1,0 +1,24 @@
+---
+source: tests/snapshot_test.rs
+expression: terminal.backend()
+---
+"┌ Help ────────────────────────────────────────────────────────────────────────┐"
+"│h-m-m Help                                                                    │"
+"│                                                                              │"
+"│Navigation:                                                                   │"
+"│  h/←  Move left (parent)                                                     │"
+"│  j/↓  Move down                                                              │"
+"│  k/↑  Move up                                                                │"
+"│  l/→  Move right (child)                                                     │"
+"│  g    Go to top                                                              │"
+"│  G    Go to bottom                                                           │"
+"│  m/~  Go to root                                                             │"
+"│                                                                              │"
+"│Editing:                                                                      │"
+"│  e/i  Edit node (append)                                                     │"
+"│  E/I  Edit node (replace)                                                    │"
+"│  o/⏎  Insert sibling                                                         │"
+"│  O/⇥  Insert child                                                           │"
+"│  d    Delete node                                                            │"
+"└──────────────────────────────────────────────────────────────────────────────┘"
+"Press ESC or q to close help                                                    "

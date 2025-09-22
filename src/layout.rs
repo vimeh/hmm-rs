@@ -277,3 +277,150 @@ fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
 
     lines
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::AppState;
+    use crate::config::AppConfig;
+    use crate::model::Node;
+    use indextree::Arena;
+
+    fn create_test_app() -> AppState {
+        let config = AppConfig::default();
+        let mut app = AppState::new(config);
+
+        // Create a simple tree
+        let root = app.tree.new_node(Node::new("Root".to_string()));
+        let child1 = app.tree.new_node(Node::new("Child 1".to_string()));
+        let child2 = app.tree.new_node(Node::new("Child 2".to_string()));
+        let grandchild = app.tree.new_node(Node::new("Grandchild".to_string()));
+
+        root.append(child1, &mut app.tree);
+        root.append(child2, &mut app.tree);
+        child2.append(grandchild, &mut app.tree);
+
+        app.root_id = Some(root);
+        app.active_node_id = Some(root);
+
+        app
+    }
+
+    #[test]
+    fn test_layout_engine_creation() {
+        let engine = LayoutEngine::new();
+        assert_eq!(engine.map_width, 0.0);
+        assert_eq!(engine.map_height, 0.0);
+        assert_eq!(engine.map_top, 0.0);
+        assert_eq!(engine.map_bottom, 0.0);
+        assert!(engine.nodes.is_empty());
+    }
+
+    #[test]
+    fn test_calculate_layout_simple_tree() {
+        let app = create_test_app();
+        let layout = LayoutEngine::calculate_layout(&app);
+
+        // Should have layout for all nodes
+        assert_eq!(layout.nodes.len(), 4);
+
+        // Root should be at leftmost position
+        let root_layout = layout.nodes.get(&app.root_id.unwrap()).unwrap();
+        assert_eq!(root_layout.x, LEFT_PADDING as f64);
+
+        // Map dimensions should be positive
+        assert!(layout.map_width > 0.0);
+        assert!(layout.map_height >= 0.0);
+    }
+
+    #[test]
+    fn test_calculate_layout_with_collapsed_node() {
+        let mut app = create_test_app();
+
+        // Collapse child2
+        let child2_id = app.root_id.unwrap().children(&app.tree).nth(1).unwrap();
+        app.tree.get_mut(child2_id).unwrap().get_mut().is_collapsed = true;
+
+        let layout = LayoutEngine::calculate_layout(&app);
+
+        // Should still have layout for all nodes
+        assert_eq!(layout.nodes.len(), 4);
+    }
+
+    #[test]
+    fn test_wrap_text() {
+        let text = "This is a very long line that should be wrapped";
+        let lines = wrap_text(text, 15);
+
+        assert!(lines.len() > 1);
+        for line in &lines {
+            assert!(line.len() <= 15);
+        }
+    }
+
+    #[test]
+    fn test_wrap_text_single_word() {
+        let text = "SingleWord";
+        let lines = wrap_text(text, 20);
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], "SingleWord");
+    }
+
+    #[test]
+    fn test_wrap_text_unicode() {
+        let text = "这是一段中文文本 with mixed 内容";
+        let lines = wrap_text(text, 20);
+
+        assert!(!lines.is_empty());
+    }
+
+    #[test]
+    fn test_layout_with_hidden_nodes() {
+        let mut app = create_test_app();
+
+        // Mark a child as hidden
+        let child1_id = app.root_id.unwrap().children(&app.tree).nth(0).unwrap();
+        app.tree.get_mut(child1_id).unwrap().get_mut().title = "[HIDDEN] Child 1".to_string();
+
+        // Hide hidden nodes
+        app.config.show_hidden = false;
+
+        let layout = LayoutEngine::calculate_layout(&app);
+
+        // When show_hidden is false, hidden nodes are filtered out during layout calculation
+        // So we check that the layout was calculated (has nodes) but the hidden node might not be included
+        assert!(!layout.nodes.is_empty());
+        assert!(layout.nodes.contains_key(&app.root_id.unwrap()));
+    }
+
+    #[test]
+    fn test_get_visible_nodes() {
+        let mut engine = LayoutEngine::new();
+
+        // Create nodes from a shared arena
+        let mut arena = Arena::<Node>::new();
+        let node1 = arena.new_node(Node::new("test1".to_string()));
+        let node2 = arena.new_node(Node::new("test2".to_string()));
+
+        engine.nodes.insert(node1, LayoutNode {
+            x: 10.0, y: 10.0, w: 20.0, h: 10.0,
+            lh: 1.0, yo: 0.0, xo: 0.0,
+        });
+
+        engine.nodes.insert(node2, LayoutNode {
+            x: 50.0, y: 50.0, w: 20.0, h: 10.0,
+            lh: 1.0, yo: 0.0, xo: 0.0,
+        });
+
+        // Test viewport that includes first node only
+        let viewport = (0.0, 0.0, 40.0, 40.0);
+        let visible = engine.get_visible_nodes(viewport);
+        assert_eq!(visible.len(), 1);
+
+        // Test viewport that includes both nodes
+        let viewport = (0.0, 0.0, 100.0, 100.0);
+        let visible = engine.get_visible_nodes(viewport);
+        assert_eq!(visible.len(), 2);
+    }
+}

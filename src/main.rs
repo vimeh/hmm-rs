@@ -1,11 +1,6 @@
+use hmm_rs::{app, config, model, parser, ui};
 mod actions;
-mod app;
-mod config;
 mod event;
-mod layout;
-mod model;
-mod parser;
-mod ui;
 
 use anyhow::Result;
 use app::AppState;
