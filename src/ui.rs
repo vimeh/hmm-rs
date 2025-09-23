@@ -471,11 +471,40 @@ fn render_status_line(frame: &mut Frame, app: &AppState, area: Rect) {
                 format!("h-m-m | {} nodes", app.tree.count())
             }
         }
-        AppMode::Editing {
-            buffer,
-            cursor_pos: _,
-        } => {
-            format!("Edit: {}", buffer)
+        AppMode::Editing { buffer, cursor_pos } => {
+            // Create edit line with cursor indicator
+            let mut display = String::new();
+            display.push_str("Edit: ");
+
+            // Calculate visible portion if text is too long
+            let available_width = area.width.saturating_sub(7) as usize; // "Edit: " + 1 for cursor
+            let text_start = if *cursor_pos > available_width.saturating_sub(10) {
+                cursor_pos.saturating_sub(available_width / 2)
+            } else {
+                0
+            };
+
+            let visible_buffer = if buffer.len() > available_width {
+                let end = (text_start + available_width).min(buffer.len());
+                &buffer[text_start..end]
+            } else {
+                buffer.as_str()
+            };
+
+            // Adjust cursor position for visible portion
+            let visible_cursor = cursor_pos.saturating_sub(text_start);
+
+            // Insert cursor indicator
+            if visible_cursor <= visible_buffer.len() {
+                display.push_str(&visible_buffer[..visible_cursor]);
+                display.push('▌'); // Cursor character
+                display.push_str(&visible_buffer[visible_cursor..]);
+            } else {
+                display.push_str(visible_buffer);
+                display.push('▌');
+            }
+
+            display
         }
         AppMode::Search { query } => {
             format!("Search: {}", query)

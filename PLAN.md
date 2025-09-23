@@ -192,7 +192,7 @@ h-m-m/
      - `fn save_file(app: &mut AppState)`: Implements `save`. This will require a `map_to_list` equivalent that traverses the `Arena` and generates the indented text format.
      - `fn enter_edit_mode(app: &mut AppState)`: Switches `app.mode` to `Editing` and prepares a text buffer.
 
-#### Step 8: The "Magic Readline" Implementation ✅ MOSTLY COMPLETE (85%)
+#### Step 8: The "Magic Readline" Implementation ✅ COMPLETE
 
 1. **State:** Add fields to `AppState` for the editor state, e.g., `editor_buffer: String`, `editor_cursor_pos: usize`.
 1. **Mode:** When an "edit" action is triggered, switch `app.mode` to `Editing`.
@@ -228,10 +228,9 @@ This structured plan breaks the monolithic script into manageable, testable comp
 - **Help Screen**: Complete help mode with key bindings display
 - **Symbol Toggle**: Configurable symbol switching
 - **Collapse Shortcuts**: Number keys 1-5 for level collapsing
-- **Advanced Editing**: Cursor movement, clipboard integration
+- **Magic Readline**: Full editing with word navigation, deletion, clipboard paste, visual cursor
 
 ### ⚠️ Partially Complete:
-- **Magic Readline (85%)**: Basic editing works perfectly, missing only word jumping
 - **Final Polish (85%)**: Auto-save and Save As still needed
 
 ### 🔴 TODO - High Priority:
@@ -245,12 +244,11 @@ All high priority items have been completed! ✅
 5. **Node Numbering**: Display sequential numbers (#key)
 
 ### 🟢 TODO - Low Priority:
-1. **Word Jumping**: Add Ctrl+Arrow for word-by-word cursor movement in edit mode
-2. **Visual Polish**: Fine-tune colors and styles
-3. **Tests**: Expand test coverage for edge cases
-4. **Performance**: Optimize for very large mind maps (1000+ nodes)
-5. **Documentation**: User guide and API docs
-6. **Packaging**: Distribution and installation scripts
+1. **Visual Polish**: Fine-tune colors and styles
+2. **Tests**: Expand test coverage for edge cases
+3. **Performance**: Optimize for very large mind maps (1000+ nodes)
+4. **Documentation**: User guide and API docs
+5. **Packaging**: Distribution and installation scripts
 
 **Overall Progress: ~90-95% Complete**
 

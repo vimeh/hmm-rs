@@ -143,16 +143,40 @@ fn handle_normal_mode(key: KeyEvent) -> Option<Action> {
 fn handle_editing_mode(key: KeyEvent) -> Option<Action> {
     use KeyCode::*;
 
-    match key.code {
-        Esc => Some(Action::CancelEdit),
-        Enter => Some(Action::ConfirmEdit),
-        Char(c) => Some(Action::TypeChar(c)),
-        Backspace => Some(Action::Backspace),
-        Delete => Some(Action::Delete),
-        Left => Some(Action::MoveCursorLeft),
-        Right => Some(Action::MoveCursorRight),
-        Home => Some(Action::MoveCursorHome),
-        End => Some(Action::MoveCursorEnd),
+    match (key.code, key.modifiers) {
+        // Basic editing
+        (Esc, _) => Some(Action::CancelEdit),
+        (Enter, _) => Some(Action::ConfirmEdit),
+        (Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => Some(Action::TypeChar(c)),
+
+        // Deletion
+        (Backspace, KeyModifiers::NONE) => Some(Action::Backspace),
+        (Backspace, KeyModifiers::CONTROL) => Some(Action::DeleteWordBackward),
+        (Backspace, KeyModifiers::ALT) => Some(Action::DeleteWordBackward),
+        (Char('w'), KeyModifiers::CONTROL) => Some(Action::DeleteWordBackward),
+        (Delete, KeyModifiers::NONE) => Some(Action::Delete),
+        (Delete, KeyModifiers::CONTROL) => Some(Action::DeleteWordForward),
+        (Char('d'), KeyModifiers::ALT) => Some(Action::DeleteWordForward),
+        (Char('k'), KeyModifiers::CONTROL) => Some(Action::DeleteToEnd),
+        (Char('u'), KeyModifiers::CONTROL) => Some(Action::DeleteToStart),
+
+        // Movement
+        (Left, KeyModifiers::NONE) => Some(Action::MoveCursorLeft),
+        (Right, KeyModifiers::NONE) => Some(Action::MoveCursorRight),
+        (Left, KeyModifiers::CONTROL) => Some(Action::MoveCursorWordLeft),
+        (Right, KeyModifiers::CONTROL) => Some(Action::MoveCursorWordRight),
+        (Left, KeyModifiers::ALT) => Some(Action::MoveCursorWordLeft),
+        (Right, KeyModifiers::ALT) => Some(Action::MoveCursorWordRight),
+        (Char('b'), KeyModifiers::ALT) => Some(Action::MoveCursorWordLeft),
+        (Char('f'), KeyModifiers::ALT) => Some(Action::MoveCursorWordRight),
+        (Home, _) => Some(Action::MoveCursorHome),
+        (End, _) => Some(Action::MoveCursorEnd),
+        (Char('a'), KeyModifiers::CONTROL) => Some(Action::MoveCursorHome),
+        (Char('e'), KeyModifiers::CONTROL) => Some(Action::MoveCursorEnd),
+
+        // Clipboard
+        (Char('v'), KeyModifiers::CONTROL) => Some(Action::PasteAtCursor),
+
         _ => None,
     }
 }
