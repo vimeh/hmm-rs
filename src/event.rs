@@ -31,6 +31,10 @@ fn handle_normal_mode(key: KeyEvent) -> Option<Action> {
         (Char('Q'), KeyModifiers::SHIFT) => Some(Action::ForceQuit),
         (Char('c'), KeyModifiers::CONTROL) => Some(Action::Quit),
 
+        // Star rating (must come before general arrow key handling)
+        (Up, KeyModifiers::ALT) => Some(Action::AddStar),
+        (Down, KeyModifiers::ALT) => Some(Action::RemoveStar),
+
         // Movement
         (Char('h'), KeyModifiers::NONE) | (Left, _) => Some(Action::GoLeft),
         (Char('j'), KeyModifiers::NONE) | (Down, _) => Some(Action::GoDown),
@@ -122,6 +126,12 @@ fn handle_normal_mode(key: KeyEvent) -> Option<Action> {
         // Hidden nodes
         (Char('H'), KeyModifiers::SHIFT) => Some(Action::ToggleHide),
         (Char('h'), KeyModifiers::CONTROL) => Some(Action::ToggleShowHidden),
+
+        // Rank operations
+        (Char('='), KeyModifiers::NONE) => Some(Action::IncreasePositiveRank),
+        (Char('+'), KeyModifiers::NONE) => Some(Action::DecreasePositiveRank),
+        (Char('-'), KeyModifiers::NONE) => Some(Action::IncreaseNegativeRank),
+        (Char('_'), KeyModifiers::SHIFT) => Some(Action::DecreaseNegativeRank),
 
         // Help
         (Char('?'), KeyModifiers::NONE) => Some(Action::ShowHelp),

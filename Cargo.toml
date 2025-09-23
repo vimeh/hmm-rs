@@ -20,6 +20,7 @@ crossterm = "0.29.0"
 directories = "6.0.0"
 indextree = "4.7.4"
 ratatui = "0.29.0"
+regex = "1.11.2"
 serde = { version = "1.0.226", features = ["derive"] }
 unicode-width = "0.2.0"
 
