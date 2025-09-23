@@ -209,7 +209,7 @@ This structured plan breaks the monolithic script into manageable, testable comp
 
 ---
 
-## Implementation Status Summary (as of 2025-09-22 evening)
+## Implementation Status Summary (as of 2025-09-22 late evening)
 
 ### ✅ Completed Components:
 - **Project Setup**: All dependencies installed, project structure in place
@@ -222,6 +222,9 @@ This structured plan breaks the monolithic script into manageable, testable comp
 - **Connection Drawing**: Full PHP-style box-drawing implementation
 - **Viewport Management**: Scrolling and centering functionality
 - **Export Functions**: HTML and text export fully implemented with tests
+- **Paste Operations**: Complete paste as children/siblings with clipboard parsing
+- **Rank System**: Positive/negative ranking with (X+,Y-) format
+- **Star Rating**: 5-star rating system with filled/empty star display
 
 ### ⚠️ Partially Complete:
 - **Layout Engine (85%)**: Layout calculations work well, minor optimizations possible
@@ -232,13 +235,17 @@ This structured plan breaks the monolithic script into manageable, testable comp
 1. ~~**Connection Drawing**: Port the complete box-drawing algorithm from PHP~~ ✅ COMPLETE
 2. ~~**Viewport Management**: Implement proper scrolling and centering~~ ✅ COMPLETE
 3. ~~**Export Functions**: Complete HTML and text export~~ ✅ COMPLETE
-4. **Missing Keybindings**: Add rank adjustment, star operations, link opening
+4. ~~**Paste Operations**: Complete clipboard parsing and paste functions~~ ✅ COMPLETE
+5. ~~**Rank & Star Systems**: Add rank adjustment and star operations~~ ✅ COMPLETE
 
 ### 🟡 TODO - Medium Priority:
-5. **Visual Polish**: Add colors, symbols, and visual feedback
-6. **Auto-save**: Implement timer-based saving
-7. **Advanced Editing**: Word jumping, clipboard in edit mode
-8. **Help Screen**: Complete help documentation
+1. **Visual Polish**: Add colors, symbols, and visual feedback
+2. **Auto-save**: Implement timer-based saving
+3. **Advanced Editing**: Word jumping, clipboard in edit mode
+4. **Help Screen**: Complete help documentation
+5. **Save As Function**: Implement file name prompt
+6. **Symbol Toggle**: Implement configurable symbol switching
+7. **Collapse Level Shortcuts**: Add number key shortcuts for levels
 
 ### 🟢 TODO - Low Priority:
 9. **Tests**: Add comprehensive test coverage
@@ -246,6 +253,6 @@ This structured plan breaks the monolithic script into manageable, testable comp
 11. **Documentation**: User guide and API docs
 12. **Packaging**: Distribution and installation scripts
 
-**Overall Progress: ~85% Complete**
+**Overall Progress: ~90% Complete**
 
 The core architecture is solid and most basic functionality works. The remaining work is primarily feature completion and polish rather than fundamental changes.

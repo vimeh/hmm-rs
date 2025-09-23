@@ -1226,7 +1226,7 @@ fn modify_rank(app: &mut AppState, positive_change: i32, negative_change: i32) {
             node.title = format!("({}+,{}-) {}", positive, negative, node.title);
         }
 
-        app.set_message(&format!("Rank: {}+, {}-", positive, negative));
+        app.set_message(format!("Rank: {}+, {}-", positive, negative));
     }
 }
 
@@ -1247,13 +1247,12 @@ fn modify_stars(app: &mut AppState, change: i32) {
 
         // Count existing stars
         let current_stars = node.title.matches('★').count() as i32;
-        let new_stars = (current_stars + change).max(0).min(5) as usize;
+        let new_stars = (current_stars + change).clamp(0, 5) as usize;
 
         // Remove existing stars and empty stars
         node.title = node
             .title
-            .replace('★', "")
-            .replace('☆', "")
+            .replace(['★', '☆'], "")
             .trim()
             .to_string();
 
@@ -1263,7 +1262,7 @@ fn modify_stars(app: &mut AppState, change: i32) {
             node.title.push_str(&stars_string);
         }
 
-        app.set_message(&format!("{} stars", new_stars));
+        app.set_message(format!("{} stars", new_stars));
     }
 }
 
