@@ -119,56 +119,74 @@ fn draw_node_connections(
             }
         } else if !children.is_empty() {
             // Draw connections to children
-            for (i, child_id) in children.iter().enumerate() {
-                if let Some(child_layout) = layout.nodes.get(child_id) {
-                    let parent_x = (node_layout.x + node_layout.w - app.viewport_left) as usize;
-                    let parent_y = (node_layout.y + node_layout.yo + node_layout.lh / 2.0
-                        - app.viewport_top) as usize;
-                    let child_x = (child_layout.x - app.viewport_left) as usize;
-                    let child_y = (child_layout.y + child_layout.yo + child_layout.lh / 2.0
-                        - app.viewport_top) as usize;
+            let parent_x = (node_layout.x + node_layout.w - app.viewport_left) as usize;
+            let parent_y = (node_layout.y + node_layout.yo + node_layout.lh / 2.0
+                - app.viewport_top) as usize;
 
-                    if parent_x < area.width as usize && parent_y < area.height as usize {
-                        // Draw horizontal line from parent
-                        for x in parent_x..(parent_x + 4).min(area.width as usize) {
-                            set_char(buffer, x, parent_y, '─');
-                        }
-                    }
+            // Draw horizontal line from parent node text
+            if parent_x < area.width as usize && parent_y < area.height as usize {
+                for x in parent_x..(parent_x + 4).min(area.width as usize) {
+                    set_char(buffer, x, parent_y, '─');
+                }
+            }
 
-                    if child_x > 2
-                        && child_x < area.width as usize
-                        && child_y < area.height as usize
-                    {
-                        // Draw horizontal line to child
-                        for x in (child_x - 2)..(child_x).min(area.width as usize) {
-                            set_char(buffer, x, child_y, '─');
-                        }
-                    }
+            // Calculate vertical connector position (right after parent's horizontal line)
+            let conn_x = parent_x + 4;
 
-                    // Draw vertical connection if needed
-                    if children.len() > 1 {
-                        let conn_x = if child_x > 4 { child_x - 4 } else { 0 };
+                // Get first and last child positions
+                if let (Some(first_layout), Some(last_layout)) =
+                    (layout.nodes.get(&children[0]), layout.nodes.get(&children[children.len() - 1])) {
 
-                        // Get first and last child positions to draw continuous vertical line
-                        let first_child_layout = layout.nodes.get(&children[0]);
-                        let last_child_layout = layout.nodes.get(&children[children.len() - 1]);
+                    let first_y = (first_layout.y + first_layout.yo + first_layout.lh / 2.0 - app.viewport_top) as usize;
+                    let last_y = (last_layout.y + last_layout.yo + last_layout.lh / 2.0 - app.viewport_top) as usize;
 
-                        if let (Some(first_layout), Some(last_layout)) = (first_child_layout, last_child_layout) {
-                            let first_y = (first_layout.y + first_layout.yo + first_layout.lh / 2.0 - app.viewport_top) as usize;
-                            let last_y = (last_layout.y + last_layout.yo + last_layout.lh / 2.0 - app.viewport_top) as usize;
-
-                            // Draw continuous vertical line from first to last child
-                            for y in first_y..=last_y.min(area.height as usize - 1) {
-                                if conn_x < area.width as usize && y < area.height as usize {
+                    // Draw continuous vertical line from parent level to last child
+                    if conn_x < area.width as usize {
+                        // Connect from parent y to first child
+                        if parent_y < first_y {
+                            for y in parent_y..first_y {
+                                if y < area.height as usize {
                                     set_char(buffer, conn_x, y, '│');
                                 }
                             }
                         }
+                        // Draw through all children
+                        for y in first_y..=last_y.min(area.height as usize - 1) {
+                            if y < area.height as usize {
+                                set_char(buffer, conn_x, y, '│');
+                            }
+                        }
+                    }
+                }
 
-                        // Now overlay the appropriate connector character for this child
-                        if i == 0 {
-                            // First child
-                            set_char(buffer, conn_x, child_y, '╭');
+            // Now draw horizontal connectors for each child
+            for (i, child_id) in children.iter().enumerate() {
+                if let Some(child_layout) = layout.nodes.get(child_id) {
+                    let child_x = (child_layout.x - app.viewport_left) as usize;
+                    let child_y = (child_layout.y + child_layout.yo + child_layout.lh / 2.0
+                        - app.viewport_top) as usize;
+
+                    if child_y < area.height as usize && conn_x < area.width as usize {
+                        // Draw horizontal line from vertical connector to just before child text
+                        // Leave 2 spaces before the child text for the "──" prefix
+                        if child_x > 2 {
+                            for x in conn_x..(child_x - 2).min(area.width as usize) {
+                                set_char(buffer, x, child_y, '─');
+                            }
+                            // Add the "──" prefix right before the child text
+                            if child_x >= 2 {
+                                set_char(buffer, child_x - 2, child_y, '─');
+                                set_char(buffer, child_x - 1, child_y, '─');
+                            }
+                        }
+
+                        // Place junction character at vertical line
+                        if children.len() == 1 {
+                            // Single child - horizontal line continues
+                            set_char(buffer, conn_x, child_y, '─');
+                        } else if i == 0 {
+                            // First child of multiple
+                            set_char(buffer, conn_x, child_y, '├');
                         } else if i == children.len() - 1 {
                             // Last child
                             set_char(buffer, conn_x, child_y, '╰');
@@ -177,11 +195,11 @@ fn draw_node_connections(
                             set_char(buffer, conn_x, child_y, '├');
                         }
                     }
-                }
 
-                // Recursively draw connections for children
-                if !node.is_collapsed {
-                    draw_node_connections(buffer, app, layout, *child_id, area);
+                    // Recursively draw connections for children
+                    if !node.is_collapsed {
+                        draw_node_connections(buffer, app, layout, *child_id, area);
+                    }
                 }
             }
         }
