@@ -199,7 +199,7 @@ h-m-m/
 1. **Event Handling:** In `event.rs`, when the mode is `Editing`, key presses are not mapped to `Action`s. Instead, they directly modify `editor_buffer` and `editor_cursor_pos` (e.g., character input, backspace, moving cursor left/right). The `Enter` key finalizes the edit, updates the node's title in the `tree`, and switches the mode back to `Normal`. `Escape` cancels.
 1. **Rendering:** In `ui.rs`, if the mode is `Editing`, render the `editor_buffer` as a text input line at the bottom of the screen, with a styled block representing the cursor.
 
-#### Step 9: Final Features and Polish 🚧 IN PROGRESS (40%)
+#### Step 9: Final Features and Polish 🚧 IN PROGRESS (60%)
 
 1. **Clipboard:** Use the `clipboard` crate for all yank/paste/cut operations.
 1. **Exporting:** Implement `export_html` and `export_text` by traversing the layout map and tree data.
@@ -209,7 +209,7 @@ This structured plan breaks the monolithic script into manageable, testable comp
 
 ---
 
-## Implementation Status Summary (as of 2025-09-22)
+## Implementation Status Summary (as of 2025-09-22 evening)
 
 ### ✅ Completed Components:
 - **Project Setup**: All dependencies installed, project structure in place
@@ -219,17 +219,19 @@ This structured plan breaks the monolithic script into manageable, testable comp
 - **Terminal Management**: Crossterm integration for alternate screen and raw mode
 - **Event Loop**: Main application loop with event handling
 - **Basic Actions**: Movement, node manipulation, editing, collapsing
+- **Connection Drawing**: Full PHP-style box-drawing implementation
+- **Viewport Management**: Scrolling and centering functionality
+- **Export Functions**: HTML and text export fully implemented with tests
 
 ### ⚠️ Partially Complete:
-- **Layout Engine (70%)**: Basic layout calculations work, missing some edge cases
-- **UI Rendering (60%)**: Basic rendering works, but connection drawing needs work
+- **Layout Engine (85%)**: Layout calculations work well, minor optimizations possible
+- **UI Rendering (90%)**: Full rendering with connection drawing complete
 - **Magic Readline (50%)**: Basic editing works, missing advanced features
-- **Export Functions (20%)**: Stubs exist, implementation needed
 
 ### 🔴 TODO - High Priority:
-1. **Connection Drawing**: Port the complete box-drawing algorithm from PHP
-2. **Viewport Management**: Implement proper scrolling and centering
-3. **Export Functions**: Complete HTML and text export
+1. ~~**Connection Drawing**: Port the complete box-drawing algorithm from PHP~~ ✅ COMPLETE
+2. ~~**Viewport Management**: Implement proper scrolling and centering~~ ✅ COMPLETE
+3. ~~**Export Functions**: Complete HTML and text export~~ ✅ COMPLETE
 4. **Missing Keybindings**: Add rank adjustment, star operations, link opening
 
 ### 🟡 TODO - Medium Priority:
@@ -244,6 +246,6 @@ This structured plan breaks the monolithic script into manageable, testable comp
 11. **Documentation**: User guide and API docs
 12. **Packaging**: Distribution and installation scripts
 
-**Overall Progress: ~75% Complete**
+**Overall Progress: ~85% Complete**
 
 The core architecture is solid and most basic functionality works. The remaining work is primarily feature completion and polish rather than fundamental changes.
