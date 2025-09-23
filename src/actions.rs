@@ -1001,7 +1001,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Skipping - delete_node has side effects on history
     fn test_delete_node() {
         let mut app = create_test_app();
         let root = app.root_id.unwrap();
@@ -1009,20 +1008,36 @@ mod tests {
 
         app.active_node_id = Some(child1);
 
-        // Initialize history for delete
-        app.push_history();
-
-        let initial_count = app.tree.count();
+        // Store the NodeId of child1 before deletion
+        let child1_id = child1;
 
         delete_node(&mut app);
 
-        // Child1 is removed, so count should be reduced by 1
-        assert_eq!(app.tree.count(), initial_count - 1);
-        // Should have moved to another node (sibling or parent)
-        assert_ne!(app.active_node_id, Some(child1));
+        // In indextree, removed nodes still exist in the arena but are marked as removed
+        // The count() method includes removed nodes, so we need to check differently
+        // Check that the node is marked as removed
+        if let Some(node_ref) = app.tree.get(child1_id) {
+            assert!(node_ref.is_removed(), "Node should be marked as removed");
+        }
 
-        // Verify the node is actually gone
-        assert!(app.tree.get(child1).is_none());
+        // Should have moved to another node (sibling or parent)
+        assert_ne!(app.active_node_id, Some(child1_id));
+
+        // The active node should be valid and not removed
+        if let Some(active_id) = app.active_node_id {
+            let active_node = app.tree.get(active_id).expect("Active node should exist");
+            assert!(!active_node.is_removed(), "Active node should not be removed");
+        }
+
+        // Verify clipboard has the deleted content
+        assert!(app.clipboard.is_some());
+
+        // Verify that the node is no longer a child of root
+        let remaining_children: Vec<_> = root.children(&app.tree).collect();
+        assert!(!remaining_children.contains(&child1_id), "Child1 should not be in root's children");
+
+        // Should only have one child left (Child2 with its Grandchild)
+        assert_eq!(remaining_children.len(), 1);
     }
 
     #[test]
@@ -1235,29 +1250,43 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Skipping - undo/redo works with cloned trees which have different NodeIds
     fn test_undo_redo() {
         let mut app = create_test_app();
 
-        // Save initial state
+        // The initial tree should have "Root" as the title
+        let initial_title = app.tree.get(app.root_id.unwrap()).unwrap().get().title.clone();
+        assert_eq!(initial_title, "Root");
+
+        // Save initial state to history
         app.push_history();
 
-        // Make a change - need to get root after push_history
+        // Make a change and save it
         let root = app.root_id.unwrap();
         app.tree.get_mut(root).unwrap().get_mut().title = "Modified".to_string();
         app.push_history();
 
-        // Verify we have the modified state
-        assert_eq!(app.tree.get(root).unwrap().get().title, "Modified");
+        // Make another change (current state, not in history yet)
+        app.tree.get_mut(root).unwrap().get_mut().title = "Modified2".to_string();
 
-        // Undo - should go back to "Root"
+        // Verify we have the current state
+        assert_eq!(app.tree.get(app.root_id.unwrap()).unwrap().get().title, "Modified2");
+
+        // Undo - should go back to "Modified" (the last saved state)
         undo(&mut app);
-        // After undo, root should still be valid and point to the restored node
-        assert_eq!(app.tree.get(root).unwrap().get().title, "Root");
+        assert_eq!(app.tree.get(app.root_id.unwrap()).unwrap().get().title, "Modified");
+
+        // Undo again - should go back to "Root"
+        undo(&mut app);
+        assert_eq!(app.tree.get(app.root_id.unwrap()).unwrap().get().title, "Root");
 
         // Redo - should go forward to "Modified"
         redo(&mut app);
-        assert_eq!(app.tree.get(root).unwrap().get().title, "Modified");
+        assert_eq!(app.tree.get(app.root_id.unwrap()).unwrap().get().title, "Modified");
+
+        // Redo again - should not change since we lost "Modified2" when we did undo
+        redo(&mut app);
+        assert!(app.message.is_some()); // Should have "Nothing to redo" message
+        assert_eq!(app.tree.get(app.root_id.unwrap()).unwrap().get().title, "Modified");
     }
 
     #[test]
