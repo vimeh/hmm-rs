@@ -133,6 +133,11 @@ fn draw_node_connections(
             // Calculate vertical connector position (right after parent's horizontal line)
             let conn_x = parent_x + 4;
 
+            // Place the T-junction character at the connection point
+            if conn_x < area.width as usize && parent_y < area.height as usize {
+                set_char(buffer, conn_x, parent_y, '┤');
+            }
+
             // Get first and last child positions
             if let (Some(first_layout), Some(last_layout)) = (
                 layout.nodes.get(&children[0]),
@@ -147,16 +152,30 @@ fn draw_node_connections(
                 if conn_x < area.width as usize {
                     // Connect from parent y to first child
                     if parent_y < first_y {
-                        for y in parent_y..first_y {
+                        for y in (parent_y + 1)..first_y {
                             if y < area.height as usize {
-                                set_char(buffer, conn_x, y, '│');
+                                // Check if there's already a horizontal line here (indicating a junction)
+                                let existing = buffer[y][conn_x];
+                                if existing == '─' || existing == '┤' {
+                                    // This is a junction point - use ┤
+                                    set_char(buffer, conn_x, y, '┤');
+                                } else {
+                                    set_char(buffer, conn_x, y, '│');
+                                }
                             }
                         }
                     }
                     // Draw through all children
                     for y in first_y..=last_y.min(area.height as usize - 1) {
                         if y < area.height as usize {
-                            set_char(buffer, conn_x, y, '│');
+                            // Check if there's already a horizontal line here (indicating a junction)
+                            let existing = buffer[y][conn_x];
+                            if existing == '─' || existing == '┤' {
+                                // This is a junction point - use ┤
+                                set_char(buffer, conn_x, y, '┤');
+                            } else {
+                                set_char(buffer, conn_x, y, '│');
+                            }
                         }
                     }
                 }
