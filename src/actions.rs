@@ -818,12 +818,21 @@ fn yank_children(app: &mut AppState) -> Result<()> {
 }
 
 fn paste_as_children(app: &mut AppState) -> Result<()> {
-    if let Some(ref _clipboard_text) = app.clipboard {
-        if let Some(_active_id) = app.active_node_id {
+    if let Some(clipboard_text) = app.clipboard.clone() {
+        if let Some(active_id) = app.active_node_id {
             app.push_history();
 
-            // TODO: Parse clipboard text and add as children
-            app.set_message("Paste as children not yet fully implemented");
+            // Parse the clipboard text into a tree
+            match parser::parse_hmm_content(&clipboard_text) {
+                Ok((parsed_tree, parsed_root)) => {
+                    // Add all nodes from the parsed tree as children of the active node
+                    add_subtree_to_parent(&mut app.tree, &parsed_tree, parsed_root, active_id);
+                    app.set_message("Pasted as children");
+                }
+                Err(_) => {
+                    app.set_message("Failed to parse clipboard content");
+                }
+            }
         }
     } else {
         app.set_message("Clipboard is empty");
@@ -832,17 +841,121 @@ fn paste_as_children(app: &mut AppState) -> Result<()> {
 }
 
 fn paste_as_siblings(app: &mut AppState) -> Result<()> {
-    if let Some(ref _clipboard_text) = app.clipboard {
-        if let Some(_active_id) = app.active_node_id {
+    if let Some(clipboard_text) = app.clipboard.clone() {
+        if let Some(active_id) = app.active_node_id {
             app.push_history();
 
-            // TODO: Parse clipboard text and add as siblings
-            app.set_message("Paste as siblings not yet fully implemented");
+            // Get the parent of the active node
+            if let Some(parent_id) = app.tree.get(active_id).and_then(|n| n.parent()) {
+                // Parse the clipboard text into a tree
+                match parser::parse_hmm_content(&clipboard_text) {
+                    Ok((parsed_tree, parsed_root)) => {
+                        // Add all nodes from the parsed tree as siblings after the active node
+                        add_subtree_as_sibling(&mut app.tree, &parsed_tree, parsed_root, active_id, parent_id);
+                        app.set_message("Pasted as siblings");
+                    }
+                    Err(_) => {
+                        app.set_message("Failed to parse clipboard content");
+                    }
+                }
+            } else {
+                app.set_message("Cannot paste siblings at root level");
+            }
         }
     } else {
         app.set_message("Clipboard is empty");
     }
     Ok(())
+}
+
+// Helper functions for paste operations
+fn add_subtree_to_parent(
+    target_tree: &mut Arena<Node>,
+    source_tree: &Arena<Node>,
+    source_root: NodeId,
+    parent_id: NodeId,
+) {
+    // Recursively copy nodes from source tree to target tree
+    fn copy_subtree(
+        target_tree: &mut Arena<Node>,
+        source_tree: &Arena<Node>,
+        source_id: NodeId,
+        target_parent_id: NodeId,
+    ) {
+        // Copy the node
+        let source_node = source_tree.get(source_id).unwrap().get();
+        let new_node_id = target_tree.new_node(source_node.clone());
+        target_parent_id.append(new_node_id, target_tree);
+
+        // Recursively copy children
+        for child in source_id.children(source_tree) {
+            copy_subtree(target_tree, source_tree, child, new_node_id);
+        }
+    }
+
+    // If the parsed root is a synthetic root, add its children
+    // Otherwise, add the root itself
+    let source_node = source_tree.get(source_root).unwrap().get();
+    if source_node.title == "root" && source_root.children(source_tree).count() > 0 {
+        // Skip the synthetic root and add its children directly
+        for child in source_root.children(source_tree) {
+            copy_subtree(target_tree, source_tree, child, parent_id);
+        }
+    } else {
+        // Add the root and all its descendants
+        copy_subtree(target_tree, source_tree, source_root, parent_id);
+    }
+}
+
+fn add_subtree_as_sibling(
+    target_tree: &mut Arena<Node>,
+    source_tree: &Arena<Node>,
+    source_root: NodeId,
+    after_node: NodeId,
+    parent_id: NodeId,
+) {
+    // Recursively copy nodes from source tree to target tree
+    fn copy_subtree(
+        target_tree: &mut Arena<Node>,
+        source_tree: &Arena<Node>,
+        source_id: NodeId,
+        target_parent_id: NodeId,
+    ) -> NodeId {
+        // Copy the node
+        let source_node = source_tree.get(source_id).unwrap().get();
+        let new_node_id = target_tree.new_node(source_node.clone());
+        target_parent_id.append(new_node_id, target_tree);
+
+        // Recursively copy children
+        for child in source_id.children(source_tree) {
+            copy_subtree(target_tree, source_tree, child, new_node_id);
+        }
+
+        new_node_id
+    }
+
+    // Collect all nodes to add
+    let mut nodes_to_add = Vec::new();
+
+    let source_node = source_tree.get(source_root).unwrap().get();
+    if source_node.title == "root" && source_root.children(source_tree).count() > 0 {
+        // Skip the synthetic root and add its children
+        for child in source_root.children(source_tree) {
+            let new_node = copy_subtree(target_tree, source_tree, child, parent_id);
+            nodes_to_add.push(new_node);
+        }
+    } else {
+        // Add the root itself
+        let new_node = copy_subtree(target_tree, source_tree, source_root, parent_id);
+        nodes_to_add.push(new_node);
+    }
+
+    // Move the new nodes to be after the specified node
+    // This requires detaching and re-attaching in the right order
+    for new_node in nodes_to_add {
+        new_node.detach(target_tree);
+        after_node.insert_after(new_node, target_tree);
+    }
 }
 
 // Undo/Redo
@@ -1656,6 +1769,75 @@ mod tests {
         assert!(html_content.contains("Child 1")); // Child 1 is a leaf, so it's a <p> not <summary>
         assert!(html_content.contains("<summary>Child 2</summary>")); // Child 2 has children
         assert!(html_content.contains("<p>Grandchild</p>"));
+    }
+
+    #[test]
+    fn test_paste_as_children() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+
+        // Prepare clipboard with some content
+        app.clipboard = Some("New Node 1\n\tSubnode 1\n\tSubnode 2\nNew Node 2".to_string());
+
+        // Paste as children to root
+        paste_as_children(&mut app).unwrap();
+
+        // Check that new nodes were added as children
+        let children: Vec<_> = root.children(&app.tree).collect();
+        assert!(children.len() > 2); // Original 2 children + new nodes
+
+        // Verify the new nodes exist
+        let mut found_new_node1 = false;
+        let mut found_new_node2 = false;
+        for child in root.children(&app.tree) {
+            let node = app.tree.get(child).unwrap().get();
+            if node.title == "New Node 1" {
+                found_new_node1 = true;
+                // Check it has subnodes
+                let subnodes: Vec<_> = child.children(&app.tree).collect();
+                assert_eq!(subnodes.len(), 2);
+            }
+            if node.title == "New Node 2" {
+                found_new_node2 = true;
+            }
+        }
+        assert!(found_new_node1);
+        assert!(found_new_node2);
+    }
+
+    #[test]
+    fn test_paste_as_siblings() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+        let child1 = root.children(&app.tree).next().unwrap();
+
+        // Set active node to child1
+        app.active_node_id = Some(child1);
+
+        // Prepare clipboard with some content
+        app.clipboard = Some("Sibling 1\nSibling 2".to_string());
+
+        // Paste as siblings
+        paste_as_siblings(&mut app).unwrap();
+
+        // Check that new nodes were added as siblings
+        let children: Vec<_> = root.children(&app.tree).collect();
+        assert!(children.len() >= 4); // Original 2 children + 2 new siblings
+
+        // Verify the new siblings exist
+        let mut found_sibling1 = false;
+        let mut found_sibling2 = false;
+        for child in root.children(&app.tree) {
+            let node = app.tree.get(child).unwrap().get();
+            if node.title == "Sibling 1" {
+                found_sibling1 = true;
+            }
+            if node.title == "Sibling 2" {
+                found_sibling2 = true;
+            }
+        }
+        assert!(found_sibling1);
+        assert!(found_sibling2);
     }
 
     #[test]
