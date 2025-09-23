@@ -1310,6 +1310,162 @@ mod tests {
     }
 
     #[test]
+    fn test_delete_children() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+
+        // Root initially has 2 children (Child1, Child2)
+        let initial_children: Vec<_> = root.children(&app.tree).collect();
+        assert_eq!(initial_children.len(), 2);
+
+        // Ensure root is the active node (delete_children deletes children of active node)
+        app.active_node_id = Some(root);
+
+        // Call delete_children
+        delete_children(&mut app);
+
+        // After calling delete_children on root:
+        // Both children should be marked as removed
+        // Note: They may still appear in children() iterator, but should be marked as removed
+        for child_id in initial_children {
+            if let Some(node) = app.tree.get(child_id) {
+                assert!(node.is_removed(), "Child {:?} should be marked as removed", child_id);
+            }
+        }
+
+        // Root itself should still exist and not be removed
+        assert!(app.tree.get(root).is_some());
+        assert!(!app.tree.get(root).unwrap().is_removed());
+        assert_eq!(app.active_node_id, Some(root));
+    }
+
+    #[test]
+    fn test_move_node_up() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+        let children: Vec<_> = root.children(&app.tree).collect();
+        let child2 = children[1]; // Second child
+
+        app.active_node_id = Some(child2);
+
+        move_node_up(&mut app);
+
+        // Child2 should now be the first child
+        let new_children: Vec<_> = root.children(&app.tree).collect();
+        assert_eq!(new_children[0], child2);
+        assert_eq!(new_children[1], children[0]);
+    }
+
+    #[test]
+    fn test_move_node_down() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+        let children: Vec<_> = root.children(&app.tree).collect();
+        let child1 = children[0]; // First child
+
+        app.active_node_id = Some(child1);
+
+        move_node_down(&mut app);
+
+        // Child1 should now be the second child
+        let new_children: Vec<_> = root.children(&app.tree).collect();
+        assert_eq!(new_children[0], children[1]);
+        assert_eq!(new_children[1], child1);
+    }
+
+    #[test]
+    fn test_go_to_top() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+        let child2 = root.children(&app.tree).nth(1).unwrap();
+
+        // Start at child2
+        app.active_node_id = Some(child2);
+
+        go_to_top(&mut app);
+
+        // Should be at the root (first visible node)
+        assert_eq!(app.active_node_id, Some(root));
+    }
+
+    #[test]
+    fn test_go_to_bottom() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+
+        // Expand all to make grandchild visible
+        expand_all(&mut app);
+
+        go_to_bottom(&mut app);
+
+        // Should be at the last visible node (grandchild)
+        // Get the grandchild through Child2
+        let child2 = root.children(&app.tree).nth(1).unwrap();
+        let grandchild = child2.children(&app.tree).next().unwrap();
+        assert_eq!(app.active_node_id, Some(grandchild));
+    }
+
+    #[test]
+    fn test_collapse_children() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+
+        // Ensure children are expanded first
+        let children: Vec<_> = root.children(&app.tree).collect();
+        for child_id in &children {
+            app.tree.get_mut(*child_id).unwrap().get_mut().is_collapsed = false;
+        }
+
+        collapse_children(&mut app);
+
+        // All direct children should be collapsed
+        for child_id in root.children(&app.tree) {
+            let child = app.tree.get(child_id).unwrap().get();
+            assert!(child.is_collapsed);
+        }
+
+        // Root itself should not be collapsed
+        assert!(!app.tree.get(root).unwrap().get().is_collapsed);
+    }
+
+    #[test]
+    fn test_collapse_other_branches() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+        let child1 = root.children(&app.tree).next().unwrap();
+
+        // Set active node to child1
+        app.active_node_id = Some(child1);
+
+        // Expand all first
+        expand_all(&mut app);
+
+        collapse_other_branches(&mut app);
+
+        // Child1 and its ancestors should be expanded
+        assert!(!app.tree.get(child1).unwrap().get().is_collapsed);
+        assert!(!app.tree.get(root).unwrap().get().is_collapsed);
+
+        // Child2 should be collapsed (it's a sibling, not in the active path)
+        let child2 = root.children(&app.tree).nth(1).unwrap();
+        assert!(app.tree.get(child2).unwrap().get().is_collapsed);
+    }
+
+    #[test]
+    fn test_yank_children() {
+        let mut app = create_test_app();
+
+        yank_children(&mut app).unwrap();
+
+        // Clipboard should contain the children
+        assert!(app.clipboard.is_some());
+        let clipboard = app.clipboard.as_ref().unwrap();
+        assert!(clipboard.contains("Child 1"));
+        assert!(clipboard.contains("Child 2"));
+        assert!(!clipboard.contains("Root")); // Should not include the parent
+    }
+
+    #[test]
     fn test_layout_adjustments() {
         let mut app = create_test_app();
         let initial_width = app.config.max_parent_node_width;

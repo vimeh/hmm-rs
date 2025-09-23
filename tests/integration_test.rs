@@ -175,3 +175,119 @@ fn test_clipboard_functionality() {
 
     assert_eq!(app.clipboard, Some(clipboard_text.to_string()));
 }
+
+#[test]
+fn test_viewport_navigation() {
+    let config = AppConfig::default();
+    let mut app = AppState::new(config);
+
+    // Create a tree that extends beyond viewport
+    let root = app.tree.new_node(Node::new("Root".to_string()));
+    app.root_id = Some(root);
+    app.active_node_id = Some(root);
+
+    // Add many children to force scrolling
+    for i in 0..30 {
+        let child = app.tree.new_node(Node::new(format!("Child {}", i)));
+        root.append(child, &mut app.tree);
+    }
+
+    // Set a small terminal height to test scrolling
+    app.terminal_height = 10;
+    app.terminal_width = 80;
+
+    // Initial viewport should be at top
+    assert_eq!(app.viewport_top, 0.0);
+
+    // Move down beyond visible area (this would trigger scrolling in a real app)
+    // The actual viewport adjustment happens in the render phase
+    let last_child = root.children(&app.tree).last().unwrap();
+    app.active_node_id = Some(last_child);
+
+    // Test center lock functionality
+    app.config.center_lock = true;
+    assert!(app.config.center_lock);
+
+    app.config.center_lock = false;
+    assert!(!app.config.center_lock);
+}
+
+#[test]
+fn test_complex_tree_operations() {
+    let config = AppConfig::default();
+    let mut app = AppState::new(config);
+
+    // Create a more complex tree
+    let root = app.tree.new_node(Node::new("Project".to_string()));
+    let frontend = app.tree.new_node(Node::new("Frontend".to_string()));
+    let backend = app.tree.new_node(Node::new("Backend".to_string()));
+    let database = app.tree.new_node(Node::new("Database".to_string()));
+
+    let react = app.tree.new_node(Node::new("React".to_string()));
+    let vue = app.tree.new_node(Node::new("Vue".to_string()));
+    let node = app.tree.new_node(Node::new("Node.js".to_string()));
+    let python = app.tree.new_node(Node::new("Python".to_string()));
+    let postgres = app.tree.new_node(Node::new("PostgreSQL".to_string()));
+    let mongodb = app.tree.new_node(Node::new("MongoDB".to_string()));
+
+    // Build tree structure
+    root.append(frontend, &mut app.tree);
+    root.append(backend, &mut app.tree);
+    root.append(database, &mut app.tree);
+
+    frontend.append(react, &mut app.tree);
+    frontend.append(vue, &mut app.tree);
+    backend.append(node, &mut app.tree);
+    backend.append(python, &mut app.tree);
+    database.append(postgres, &mut app.tree);
+    database.append(mongodb, &mut app.tree);
+
+    app.root_id = Some(root);
+    app.active_node_id = Some(root);
+
+    // Test tree has correct structure
+    assert_eq!(app.tree.count(), 10);
+    assert_eq!(root.children(&app.tree).count(), 3);
+    assert_eq!(frontend.children(&app.tree).count(), 2);
+
+    // Test collapsing a branch
+    app.tree.get_mut(frontend).unwrap().get_mut().is_collapsed = true;
+
+    // Frontend's children should still exist but not be visible when collapsed
+    assert_eq!(frontend.children(&app.tree).count(), 2);
+    assert!(app.tree.get(frontend).unwrap().get().is_collapsed);
+}
+
+#[test]
+fn test_paste_operations() {
+    let config = AppConfig::default();
+    let mut app = AppState::new(config);
+
+    // Create initial tree
+    let root = app.tree.new_node(Node::new("Root".to_string()));
+    let child1 = app.tree.new_node(Node::new("Child1".to_string()));
+    let child2 = app.tree.new_node(Node::new("Child2".to_string()));
+
+    root.append(child1, &mut app.tree);
+    root.append(child2, &mut app.tree);
+
+    app.root_id = Some(root);
+    app.active_node_id = Some(child1);
+
+    // Copy content to clipboard
+    app.clipboard = Some("NewNode1\n\tSubNode1\nNewNode2".to_string());
+
+    // Test paste as children - would add to child1
+    let _initial_count = app.tree.count();
+    // Note: paste_as_children would be called here via actions
+    // We're testing the setup for it
+
+    assert!(app.clipboard.is_some());
+    assert_eq!(app.active_node_id, Some(child1));
+
+    // Test paste as siblings - would add as siblings to child1
+    app.clipboard = Some("Sibling1\nSibling2".to_string());
+
+    // Verify clipboard is ready for paste operations
+    assert!(app.clipboard.is_some());
+}

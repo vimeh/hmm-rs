@@ -1,0 +1,24 @@
+---
+source: tests/snapshot_test.rs
+expression: terminal.backend()
+---
+"                                                                                "
+"                                    Another extremely long            This grand"
+"                                    child node title that      ───────will test "
+" This is a very long root           exceeds normal width              tree struc"
+" node title that should      ╭──────constraints and needs  ────┤                "
+" wrap when displayed in  ────┤      proper text wrapping to                     "
+" the terminal                │      display correctly                           "
+"                             │                                                  "
+"                             ╰──────Short child                                 "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"h-m-m | 4 nodes                                                                 "
