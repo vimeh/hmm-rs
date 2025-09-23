@@ -181,7 +181,10 @@ mod tests {
 
         let grandchildren: Vec<_> = child2.children(&tree).collect();
         assert_eq!(grandchildren.len(), 1);
-        assert_eq!(tree.get(grandchildren[0]).unwrap().get().title, "Grandchild");
+        assert_eq!(
+            tree.get(grandchildren[0]).unwrap().get().title,
+            "Grandchild"
+        );
     }
 
     #[test]
@@ -194,8 +197,14 @@ mod tests {
 
         let children: Vec<_> = root_id.children(&tree).collect();
         assert_eq!(children.len(), 2);
-        assert_eq!(tree.get(children[0]).unwrap().get().title, "Child with asterisk");
-        assert_eq!(tree.get(children[1]).unwrap().get().title, "Child with dash");
+        assert_eq!(
+            tree.get(children[0]).unwrap().get().title,
+            "Child with asterisk"
+        );
+        assert_eq!(
+            tree.get(children[1]).unwrap().get().title,
+            "Child with dash"
+        );
     }
 
     #[test]

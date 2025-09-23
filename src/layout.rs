@@ -403,15 +403,31 @@ mod tests {
         let node1 = arena.new_node(Node::new("test1".to_string()));
         let node2 = arena.new_node(Node::new("test2".to_string()));
 
-        engine.nodes.insert(node1, LayoutNode {
-            x: 10.0, y: 10.0, w: 20.0, h: 10.0,
-            lh: 1.0, yo: 0.0, xo: 0.0,
-        });
+        engine.nodes.insert(
+            node1,
+            LayoutNode {
+                x: 10.0,
+                y: 10.0,
+                w: 20.0,
+                h: 10.0,
+                lh: 1.0,
+                yo: 0.0,
+                xo: 0.0,
+            },
+        );
 
-        engine.nodes.insert(node2, LayoutNode {
-            x: 50.0, y: 50.0, w: 20.0, h: 10.0,
-            lh: 1.0, yo: 0.0, xo: 0.0,
-        });
+        engine.nodes.insert(
+            node2,
+            LayoutNode {
+                x: 50.0,
+                y: 50.0,
+                w: 20.0,
+                h: 10.0,
+                lh: 1.0,
+                yo: 0.0,
+                xo: 0.0,
+            },
+        );
 
         // Test viewport that includes first node only
         let viewport = (0.0, 0.0, 40.0, 40.0);

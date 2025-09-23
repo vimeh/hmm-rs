@@ -3,10 +3,7 @@ use hmm_rs::config::AppConfig;
 use hmm_rs::model::Node;
 use hmm_rs::ui;
 use insta::assert_snapshot;
-use ratatui::{
-    backend::TestBackend,
-    Terminal,
-};
+use ratatui::{backend::TestBackend, Terminal};
 
 fn create_test_app_with_tree() -> AppState {
     let config = AppConfig::default();
@@ -46,9 +43,7 @@ fn test_render_empty_mindmap() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| ui::render(frame, &mut app))
-        .unwrap();
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
 
     assert_snapshot!(terminal.backend());
 }
@@ -60,9 +55,7 @@ fn test_render_simple_tree() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| ui::render(frame, &mut app))
-        .unwrap();
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
 
     assert_snapshot!(terminal.backend());
 }
@@ -73,14 +66,16 @@ fn test_render_with_collapsed_node() {
 
     // Collapse the Features node
     let features_id = app.root_id.unwrap().children(&app.tree).next().unwrap();
-    app.tree.get_mut(features_id).unwrap().get_mut().is_collapsed = true;
+    app.tree
+        .get_mut(features_id)
+        .unwrap()
+        .get_mut()
+        .is_collapsed = true;
 
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| ui::render(frame, &mut app))
-        .unwrap();
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
 
     assert_snapshot!(terminal.backend());
 }
@@ -96,9 +91,7 @@ fn test_render_with_active_node() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| ui::render(frame, &mut app))
-        .unwrap();
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
 
     assert_snapshot!(terminal.backend());
 }
@@ -115,9 +108,7 @@ fn test_render_edit_mode() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| ui::render(frame, &mut app))
-        .unwrap();
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
 
     assert_snapshot!(terminal.backend());
 }
@@ -133,9 +124,7 @@ fn test_render_search_mode() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| ui::render(frame, &mut app))
-        .unwrap();
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
 
     assert_snapshot!(terminal.backend());
 }
@@ -149,9 +138,7 @@ fn test_render_help_screen() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| ui::render(frame, &mut app))
-        .unwrap();
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
 
     assert_snapshot!(terminal.backend());
 }
@@ -165,9 +152,7 @@ fn test_render_with_message() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| ui::render(frame, &mut app))
-        .unwrap();
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
 
     assert_snapshot!(terminal.backend());
 }
@@ -187,9 +172,7 @@ fn test_render_with_hidden_node() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| ui::render(frame, &mut app))
-        .unwrap();
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
 
     assert_snapshot!(terminal.backend());
 }
@@ -217,9 +200,7 @@ fn test_render_deep_tree() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    terminal
-        .draw(|frame| ui::render(frame, &mut app))
-        .unwrap();
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
 
     assert_snapshot!(terminal.backend());
 }
