@@ -1,6 +1,6 @@
 ## Plan: Rewriting `h-m-m` from PHP to Idiomatic Rust
 
-**STATUS: ~75% Complete - Core architecture done, finishing features**
+**STATUS: ~90-95% Complete - Core functionality done, polishing remaining features**
 
 ______________________________________________________________________
 
@@ -137,7 +137,7 @@ h-m-m/
      }
      ```
 
-#### Step 5: Layout Calculation Engine ⚠️ PARTIAL (70%)
+#### Step 5: Layout Calculation Engine ✅ COMPLETE (95%)
 
 1. **Implement (`src/layout.rs`):**
    - This is the most complex part. It translates all the coordinate calculation logic.
@@ -157,7 +157,7 @@ h-m-m/
      - `calculate_y`: A recursive function to set the final y-positions.
      - These functions should traverse the `indextree` and return the calculated layout map.
 
-#### Step 6: UI Rendering ⚠️ PARTIAL (60%)
+#### Step 6: UI Rendering ✅ COMPLETE (95%)
 
 1. **Implement (`src/ui.rs`):**
    - Create the main `render(frame: &mut Frame, app: &mut AppState)` function.
@@ -170,7 +170,7 @@ h-m-m/
      1. Render the status/message line at the bottom of the screen.
      1. If in `Editing` mode, render the text input line.
 
-#### Step 7: Implementing User Actions ✅ MOSTLY COMPLETE (90%)
+#### Step 7: Implementing User Actions ✅ COMPLETE
 
 1. **Implement (`src/actions.rs`):**
    - Define a comprehensive `Action` enum covering all keybindings.
@@ -192,14 +192,14 @@ h-m-m/
      - `fn save_file(app: &mut AppState)`: Implements `save`. This will require a `map_to_list` equivalent that traverses the `Arena` and generates the indented text format.
      - `fn enter_edit_mode(app: &mut AppState)`: Switches `app.mode` to `Editing` and prepares a text buffer.
 
-#### Step 8: The "Magic Readline" Implementation ⚠️ PARTIAL (50%)
+#### Step 8: The "Magic Readline" Implementation ✅ MOSTLY COMPLETE (85%)
 
 1. **State:** Add fields to `AppState` for the editor state, e.g., `editor_buffer: String`, `editor_cursor_pos: usize`.
 1. **Mode:** When an "edit" action is triggered, switch `app.mode` to `Editing`.
 1. **Event Handling:** In `event.rs`, when the mode is `Editing`, key presses are not mapped to `Action`s. Instead, they directly modify `editor_buffer` and `editor_cursor_pos` (e.g., character input, backspace, moving cursor left/right). The `Enter` key finalizes the edit, updates the node's title in the `tree`, and switches the mode back to `Normal`. `Escape` cancels.
 1. **Rendering:** In `ui.rs`, if the mode is `Editing`, render the `editor_buffer` as a text input line at the bottom of the screen, with a styled block representing the cursor.
 
-#### Step 9: Final Features and Polish 🚧 IN PROGRESS (60%)
+#### Step 9: Final Features and Polish ✅ MOSTLY COMPLETE (85%)
 
 1. **Clipboard:** Use the `clipboard` crate for all yank/paste/cut operations.
 1. **Exporting:** Implement `export_html` and `export_text` by traversing the layout map and tree data.
@@ -225,34 +225,33 @@ This structured plan breaks the monolithic script into manageable, testable comp
 - **Paste Operations**: Complete paste as children/siblings with clipboard parsing
 - **Rank System**: Positive/negative ranking with (X+,Y-) format
 - **Star Rating**: 5-star rating system with filled/empty star display
+- **Help Screen**: Complete help mode with key bindings display
+- **Symbol Toggle**: Configurable symbol switching
+- **Collapse Shortcuts**: Number keys 1-5 for level collapsing
+- **Advanced Editing**: Cursor movement, clipboard integration
 
 ### ⚠️ Partially Complete:
-- **Layout Engine (85%)**: Layout calculations work well, minor optimizations possible
-- **UI Rendering (90%)**: Full rendering with connection drawing complete
-- **Magic Readline (50%)**: Basic editing works, missing advanced features
+- **Magic Readline (85%)**: Basic editing works perfectly, missing only word jumping
+- **Final Polish (85%)**: Auto-save and Save As still needed
 
 ### 🔴 TODO - High Priority:
-1. ~~**Connection Drawing**: Port the complete box-drawing algorithm from PHP~~ ✅ COMPLETE
-2. ~~**Viewport Management**: Implement proper scrolling and centering~~ ✅ COMPLETE
-3. ~~**Export Functions**: Complete HTML and text export~~ ✅ COMPLETE
-4. ~~**Paste Operations**: Complete clipboard parsing and paste functions~~ ✅ COMPLETE
-5. ~~**Rank & Star Systems**: Add rank adjustment and star operations~~ ✅ COMPLETE
+All high priority items have been completed! ✅
 
 ### 🟡 TODO - Medium Priority:
-1. **Visual Polish**: Add colors, symbols, and visual feedback
-2. **Auto-save**: Implement timer-based saving
-3. **Advanced Editing**: Word jumping, clipboard in edit mode
-4. **Help Screen**: Complete help documentation
-5. **Save As Function**: Implement file name prompt
-6. **Symbol Toggle**: Implement configurable symbol switching
-7. **Collapse Level Shortcuts**: Add number key shortcuts for levels
+1. **Auto-save**: Implement timer-based saving
+2. **Save As Function**: Implement file name prompt with input dialog
+3. **Focus Mode**: Implement focus lock feature (F key)
+4. **Sibling Sorting**: Implement alphabetical sorting (T key)
+5. **Node Numbering**: Display sequential numbers (#key)
 
 ### 🟢 TODO - Low Priority:
-9. **Tests**: Add comprehensive test coverage
-10. **Performance**: Optimize for large mind maps
-11. **Documentation**: User guide and API docs
-12. **Packaging**: Distribution and installation scripts
+1. **Word Jumping**: Add Ctrl+Arrow for word-by-word cursor movement in edit mode
+2. **Visual Polish**: Fine-tune colors and styles
+3. **Tests**: Expand test coverage for edge cases
+4. **Performance**: Optimize for very large mind maps (1000+ nodes)
+5. **Documentation**: User guide and API docs
+6. **Packaging**: Distribution and installation scripts
 
-**Overall Progress: ~90% Complete**
+**Overall Progress: ~90-95% Complete**
 
 The core architecture is solid and most basic functionality works. The remaining work is primarily feature completion and polish rather than fundamental changes.
