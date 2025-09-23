@@ -1,4 +1,5 @@
 use crate::app::{AppMode, AppState};
+use crate::layout::LayoutEngine;
 use crate::model::{Node, NodeId};
 use crate::parser;
 use anyhow::Result;
@@ -196,6 +197,39 @@ pub fn execute_action(action: Action, app: &mut AppState) -> Result<()> {
     Ok(())
 }
 
+// Helper function to ensure active node is visible
+fn ensure_node_visible(app: &mut AppState) {
+    if app.config.center_lock {
+        center_active_node(app);
+    } else if let Some(active_id) = app.active_node_id {
+        let layout = LayoutEngine::calculate_layout(app);
+
+        if let Some(node_layout) = layout.nodes.get(&active_id) {
+            let node_x = node_layout.x;
+            let node_y = node_layout.y + node_layout.yo;
+            let node_right = node_x + node_layout.w;
+            let node_bottom = node_y + node_layout.lh;
+
+            // Adjust viewport to ensure node is visible
+            let margin = 2.0; // Small margin around the node
+
+            // Horizontal adjustment
+            if node_x < app.viewport_left + margin {
+                app.viewport_left = (node_x - margin).max(0.0);
+            } else if node_right > app.viewport_left + app.terminal_width as f64 - margin {
+                app.viewport_left = node_right - app.terminal_width as f64 + margin;
+            }
+
+            // Vertical adjustment
+            if node_y < app.viewport_top + margin {
+                app.viewport_top = (node_y - margin).max(0.0);
+            } else if node_bottom > app.viewport_top + app.terminal_height as f64 - margin {
+                app.viewport_top = node_bottom - app.terminal_height as f64 + margin;
+            }
+        }
+    }
+}
+
 // Movement functions
 fn go_up(app: &mut AppState) {
     if let Some(active_id) = app.active_node_id {
@@ -207,8 +241,10 @@ fn go_up(app: &mut AppState) {
             if let Some(idx) = current_index {
                 if idx > 0 {
                     app.active_node_id = Some(siblings[idx - 1]);
+                    ensure_node_visible(app);
                 } else if parent_id != app.root_id.unwrap() {
                     app.active_node_id = Some(parent_id);
+                    ensure_node_visible(app);
                 }
             }
         }
@@ -222,6 +258,7 @@ fn go_down(app: &mut AppState) {
             let node = app.tree.get(active_id).unwrap().get();
             if !node.is_collapsed {
                 app.active_node_id = Some(first_child);
+                ensure_node_visible(app);
                 return;
             }
         }
@@ -234,6 +271,7 @@ fn go_down(app: &mut AppState) {
             if let Some(idx) = current_index {
                 if idx < siblings.len() - 1 {
                     app.active_node_id = Some(siblings[idx + 1]);
+                    ensure_node_visible(app);
                 }
             }
         }
@@ -245,6 +283,7 @@ fn go_left(app: &mut AppState) {
         if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1) {
             // Allow moving to parent even if it's the root
             app.active_node_id = Some(parent_id);
+            ensure_node_visible(app);
         }
     }
 }
@@ -255,6 +294,7 @@ fn go_right(app: &mut AppState) {
         if !node.is_collapsed {
             if let Some(first_child) = active_id.children(&app.tree).next() {
                 app.active_node_id = Some(first_child);
+                ensure_node_visible(app);
             }
         }
     }
@@ -262,11 +302,14 @@ fn go_right(app: &mut AppState) {
 
 fn go_to_root(app: &mut AppState) {
     app.active_node_id = app.root_id;
+    ensure_node_visible(app);
 }
 
 fn go_to_top(app: &mut AppState) {
     if let Some(root_id) = app.root_id {
         app.active_node_id = Some(root_id);
+        app.viewport_top = 0.0;
+        app.viewport_left = 0.0;
     }
 }
 
@@ -286,6 +329,7 @@ fn go_to_bottom(app: &mut AppState) {
         }
 
         app.active_node_id = Some(find_last_visible(&app.tree, root_id));
+        ensure_node_visible(app);
     }
 }
 
@@ -544,8 +588,20 @@ fn collapse_to_level(app: &mut AppState, target_level: usize) {
 }
 
 fn center_active_node(app: &mut AppState) {
-    // TODO: Implement viewport centering
-    app.set_message("Centering not yet implemented");
+    if let Some(active_id) = app.active_node_id {
+        // Get the layout to find the active node's position
+        let layout = LayoutEngine::calculate_layout(app);
+
+        if let Some(node_layout) = layout.nodes.get(&active_id) {
+            // Calculate center position
+            let node_center_x = node_layout.x + node_layout.w / 2.0;
+            let node_center_y = node_layout.y + node_layout.yo + node_layout.lh / 2.0;
+
+            // Center the viewport on the active node
+            app.viewport_left = (node_center_x - app.terminal_width as f64 / 2.0).max(0.0);
+            app.viewport_top = (node_center_y - app.terminal_height as f64 / 2.0).max(0.0);
+        }
+    }
 }
 
 fn toggle_center_lock(app: &mut AppState) {

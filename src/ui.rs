@@ -92,133 +92,224 @@ fn draw_node_connections(
     let node = app.tree.get(node_id).unwrap().get();
 
     if let Some(node_layout) = layout.nodes.get(&node_id) {
-        let children: Vec<NodeId> = if !app.config.show_hidden {
-            node_id
-                .children(&app.tree)
+        // Get visible children
+        let all_children: Vec<NodeId> = node_id.children(&app.tree).collect();
+        let visible_children: Vec<NodeId> = if !app.config.show_hidden {
+            all_children.iter()
                 .filter(|cid| {
-                    let child = app.tree.get(*cid).unwrap().get();
+                    let child = app.tree.get(**cid).unwrap().get();
                     !child.is_hidden()
                 })
+                .cloned()
                 .collect()
         } else {
-            node_id.children(&app.tree).collect()
+            all_children.clone()
         };
 
-        if node.is_collapsed && !children.is_empty() {
-            // Draw collapsed indicator
-            let x = (node_layout.x + node_layout.w + 1.0 - app.viewport_left) as usize;
-            let y = (node_layout.y + node_layout.yo - app.viewport_top) as usize;
+        let num_children = all_children.len();
+        let num_visible_children = visible_children.len();
+        let has_hidden_children = num_visible_children != num_children;
 
-            if x < area.width as usize && y < area.height as usize {
-                draw_text(buffer, x, y, " [+]");
+        // Constants from PHP version
+        const CONN_LEFT_LEN: usize = 6;
+        const CONN_RIGHT_LEN: usize = 4;
+
+        // Calculate node middle Y position
+        let node_middle_y = (node_layout.y + node_layout.yo + node_layout.lh / 2.0 - 0.6).round() as i32;
+
+        // Case 1: Node is collapsed with children
+        if node.is_collapsed && num_children > 0 {
+            let x = (node_layout.x + node_layout.w + 1.0 - app.viewport_left) as i32;
+            let y = (node_layout.y + node_layout.yo - app.viewport_top) as i32;
+
+            if x >= 0 && y >= 0 && x < area.width as i32 && y < area.height as i32 {
+                if has_hidden_children {
+                    draw_text(buffer, x as usize, y as usize, "─╫─ [+]");
+                } else {
+                    draw_text(buffer, x as usize, y as usize, " [+]");
+                }
             }
-        } else if !children.is_empty() {
-            // Draw connections to children
-            let parent_x = (node_layout.x + node_layout.w - app.viewport_left) as usize;
-            let parent_y =
-                (node_layout.y + node_layout.yo + node_layout.lh / 2.0 - app.viewport_top) as usize;
+            return;
+        }
 
-            // Draw horizontal line from parent node text
-            if parent_x < area.width as usize && parent_y < area.height as usize {
-                for x in parent_x..(parent_x + 4).min(area.width as usize) {
-                    set_char(buffer, x, parent_y, '─');
+        // Case 2: No visible children but has hidden children
+        if num_visible_children == 0 {
+            if num_children > 0 {
+                let x = (node_layout.x + node_layout.w + 1.0 - app.viewport_left) as i32;
+                let y = (node_middle_y as f64 - app.viewport_top) as i32;
+
+                if x >= 0 && y >= 0 && x < area.width as i32 && y < area.height as i32 {
+                    draw_text(buffer, x as usize, y as usize, "─╫─");
+                }
+            }
+            return;
+        }
+
+        // Case 3: Single visible child
+        if num_visible_children == 1 {
+            let child_id = visible_children[0];
+            if let Some(child_layout) = layout.nodes.get(&child_id) {
+
+                let y1 = node_middle_y;
+                let y2 = (child_layout.y + child_layout.yo + child_layout.lh / 2.0 - 0.6).round() as i32;
+
+                // Calculate x position based on alignment setting
+                let x = if app.config.align_levels {
+                    (node_layout.x + node_layout.w - 2.0 - app.viewport_left) as i32
+                } else {
+                    (child_layout.x - CONN_LEFT_LEN as f64 - CONN_RIGHT_LEN as f64 - app.viewport_left) as i32
+                };
+
+                // Build the horizontal line
+                let line_prefix = if has_hidden_children { "─╫" } else { "──" };
+                let line_len = if app.config.align_levels {
+                    (child_layout.x - node_layout.x - node_layout.w - 1.0).max(0.0) as usize
+                } else {
+                    CONN_LEFT_LEN + CONN_RIGHT_LEN - 3
+                };
+
+                // Draw horizontal line
+                if x >= 0 && y1.min(y2) >= 0 && x < area.width as i32 && y1.min(y2) < area.height as i32 {
+                    draw_text(buffer, x as usize, y1.min(y2) as usize - app.viewport_top as usize, line_prefix);
+                    for i in 0..line_len {
+                        let px = x + line_prefix.len() as i32 + i as i32;
+                        if px >= 0 && px < area.width as i32 {
+                            set_char(buffer, px as usize, y1.min(y2) as usize - app.viewport_top as usize, '─');
+                        }
+                    }
+                }
+
+                // If child is at different Y level, draw vertical connection
+                if (y1 - y2).abs() > 0 {
+                    let vert_x = (child_layout.x - 2.0 - app.viewport_left) as i32;
+
+                    // Draw vertical line
+                    for y in y1.min(y2)..y1.max(y2) {
+                        let py = y - app.viewport_top as i32;
+                        if vert_x >= 0 && py >= 0 && vert_x < area.width as i32 && py < area.height as i32 {
+                            set_char(buffer, vert_x as usize, py as usize, '│');
+                        }
+                    }
+
+                    // Draw corner at child position
+                    let py2 = y2 - app.viewport_top as i32;
+                    if vert_x >= 0 && py2 >= 0 && vert_x < area.width as i32 && py2 < area.height as i32 {
+                        set_char(buffer, vert_x as usize, py2 as usize, if y2 > y1 { '╰' } else { '╭' });
+                    }
+
+                    // Draw corner at parent level
+                    let py_min = y1.min(y2) - app.viewport_top as i32;
+                    if vert_x >= 0 && py_min >= 0 && vert_x < area.width as i32 && py_min < area.height as i32 {
+                        set_char(buffer, vert_x as usize, py_min as usize, if y2 > y1 { '╮' } else { '╯' });
+                    }
                 }
             }
 
-            // Calculate vertical connector position (right after parent's horizontal line)
-            let conn_x = parent_x + 4;
+        // Case 4: Multiple visible children
+        } else if num_visible_children > 1 {
+            // Find top and bottom children
+            let mut top_y = i32::MAX;
+            let mut bottom_y = i32::MIN;
+            let mut top_child = visible_children[0];
+            let mut bottom_child = visible_children[0];
 
-            // Place the T-junction character at the connection point
-            if conn_x < area.width as usize && parent_y < area.height as usize {
-                set_char(buffer, conn_x, parent_y, '┤');
-            }
-
-            // Get first and last child positions
-            if let (Some(first_layout), Some(last_layout)) = (
-                layout.nodes.get(&children[0]),
-                layout.nodes.get(&children[children.len() - 1]),
-            ) {
-                let first_y = (first_layout.y + first_layout.yo + first_layout.lh / 2.0
-                    - app.viewport_top) as usize;
-                let last_y = (last_layout.y + last_layout.yo + last_layout.lh / 2.0
-                    - app.viewport_top) as usize;
-
-                // Draw continuous vertical line from parent level to last child
-                if conn_x < area.width as usize {
-                    // Connect from parent y to first child
-                    if parent_y < first_y {
-                        for y in (parent_y + 1)..first_y {
-                            if y < area.height as usize {
-                                // Check if there's already a horizontal line here (indicating a junction)
-                                let existing = buffer[y][conn_x];
-                                if existing == '─' || existing == '┤' {
-                                    // This is a junction point - use ┤
-                                    set_char(buffer, conn_x, y, '┤');
-                                } else {
-                                    set_char(buffer, conn_x, y, '│');
-                                }
-                            }
-                        }
+            for &child_id in &visible_children {
+                if let Some(child_layout) = layout.nodes.get(&child_id) {
+                    let child_y = (child_layout.y + child_layout.yo) as i32;
+                    if child_y < top_y {
+                        top_y = child_y;
+                        top_child = child_id;
                     }
-                    // Draw through all children
-                    for y in first_y..=last_y.min(area.height as usize - 1) {
-                        if y < area.height as usize {
-                            // Check if there's already a horizontal line here (indicating a junction)
-                            let existing = buffer[y][conn_x];
-                            if existing == '─' || existing == '┤' {
-                                // This is a junction point - use ┤
-                                set_char(buffer, conn_x, y, '┤');
-                            } else {
-                                set_char(buffer, conn_x, y, '│');
-                            }
-                        }
+                    if child_y > bottom_y {
+                        bottom_y = child_y;
+                        bottom_child = child_id;
                     }
                 }
             }
 
-            // Now draw horizontal connectors for each child
-            for (i, child_id) in children.iter().enumerate() {
-                if let Some(child_layout) = layout.nodes.get(child_id) {
-                    let child_x = (child_layout.x - app.viewport_left) as usize;
-                    let child_y = (child_layout.y + child_layout.yo + child_layout.lh / 2.0
-                        - app.viewport_top) as usize;
+            if let Some(top_child_layout) = layout.nodes.get(&top_child) {
+                let middle = node_middle_y;
 
-                    if child_y < area.height as usize && conn_x < area.width as usize {
-                        // Draw horizontal line from vertical connector to just before child text
-                        // Leave 2 spaces before the child text for the "──" prefix
-                        if child_x > 2 {
-                            for x in conn_x..(child_x - 2).min(area.width as usize) {
-                                set_char(buffer, x, child_y, '─');
-                            }
-                            // Add the "──" prefix right before the child text
-                            if child_x >= 2 {
-                                set_char(buffer, child_x - 2, child_y, '─');
-                                set_char(buffer, child_x - 1, child_y, '─');
-                            }
+                // Calculate x position based on alignment
+                let x = if app.config.align_levels {
+                    (node_layout.x + node_layout.w - 2.0 - app.viewport_left) as i32
+                } else {
+                    (top_child_layout.x - CONN_LEFT_LEN as f64 - CONN_RIGHT_LEN as f64 - app.viewport_left) as i32
+                };
+
+                // Draw horizontal line from parent
+                let line_prefix = if has_hidden_children { "─╫" } else { "──" };
+                let line_len = if app.config.align_levels {
+                    (top_child_layout.x - node_layout.x - node_layout.w - 3.0).max(0.0) as usize
+                } else {
+                    CONN_LEFT_LEN - 2
+                };
+
+                let py = middle - app.viewport_top as i32;
+                if x >= 0 && py >= 0 && x < area.width as i32 && py < area.height as i32 {
+                    draw_text(buffer, x as usize, py as usize, line_prefix);
+                    for i in 0..line_len {
+                        let px = x + line_prefix.len() as i32 + i as i32;
+                        if px >= 0 && px < area.width as i32 {
+                            set_char(buffer, px as usize, py as usize, '─');
                         }
-
-                        // Place junction character at vertical line
-                        if children.len() == 1 {
-                            // Single child - horizontal line continues
-                            set_char(buffer, conn_x, child_y, '─');
-                        } else if i == 0 {
-                            // First child of multiple
-                            set_char(buffer, conn_x, child_y, '╭');
-                        } else if i == children.len() - 1 {
-                            // Last child
-                            set_char(buffer, conn_x, child_y, '╰');
-                        } else {
-                            // Middle children
-                            set_char(buffer, conn_x, child_y, '├');
-                        }
-                    }
-
-                    // Recursively draw connections for children
-                    if !node.is_collapsed {
-                        draw_node_connections(buffer, app, layout, *child_id, area);
                     }
                 }
+
+                // Vertical line position
+                let vert_x = (top_child_layout.x - CONN_RIGHT_LEN as f64 - app.viewport_left) as i32;
+
+                // Draw vertical line spanning all children
+                for y in top_y..bottom_y {
+                    let py = y - app.viewport_top as i32;
+                    if vert_x >= 0 && py >= 0 && vert_x < area.width as i32 && py < area.height as i32 {
+                        set_char(buffer, vert_x as usize, py as usize, '│');
+                    }
+                }
+
+                // Draw top corner
+                let top_py = top_y - app.viewport_top as i32;
+                if vert_x >= 0 && top_py >= 0 && vert_x < area.width as i32 && top_py < area.height as i32 {
+                    draw_text(buffer, vert_x as usize, top_py as usize, "╭──");
+                }
+
+                // Draw bottom corner
+                let bot_py = bottom_y - app.viewport_top as i32;
+                if vert_x >= 0 && bot_py >= 0 && vert_x < area.width as i32 && bot_py < area.height as i32 {
+                    draw_text(buffer, vert_x as usize, bot_py as usize, "╰──");
+                }
+
+                // Draw middle children connectors
+                for &child_id in &visible_children {
+                    if child_id != top_child && child_id != bottom_child {
+                        if let Some(child_layout) = layout.nodes.get(&child_id) {
+                            let cy = (child_layout.y + child_layout.yo + child_layout.lh / 2.0 - 0.2) as i32;
+                            let py = cy - app.viewport_top as i32;
+                            if vert_x >= 0 && py >= 0 && vert_x < area.width as i32 && py < area.height as i32 {
+                                draw_text(buffer, vert_x as usize, py as usize, "├──");
+                            }
+                        }
+                    }
+                }
+
+                // Fix junction points
+                let middle_py = middle - app.viewport_top as i32;
+                if vert_x >= 0 && middle_py >= 0 && vert_x < area.width as i32 && middle_py < area.height as i32 {
+                    let existing = buffer[middle_py as usize][vert_x as usize];
+                    let replacement = match existing {
+                        '│' => '┤',
+                        '╭' => '┬',
+                        '├' => '┼',
+                        _ => existing,
+                    };
+                    set_char(buffer, vert_x as usize, middle_py as usize, replacement);
+                }
             }
+        }
+
+        // Recursively draw connections for all visible children
+        for child_id in visible_children {
+            draw_node_connections(buffer, app, layout, child_id, area);
         }
     }
 }

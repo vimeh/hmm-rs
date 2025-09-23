@@ -1,32 +1,15 @@
-Rust Mind Map Tool
-	Features
-		✓ Terminal-based interface
-		✓ Keyboard navigation
-		✓ Node editing
-		✓ Collapsible nodes
-		File operations
-			Save
-			Load
-			Export HTML
-			Export Text
-		Clipboard support
-			Yank
-			Paste
-	Architecture
-		Core modules
-			model.rs - Data structures
-			app.rs - Application state
-			config.rs - Configuration
-			parser.rs - File parsing
-		UI modules
-			ui.rs - Rendering
-			layout.rs - Layout engine
-			event.rs - Event handling
-		Actions
-			Movement
-			Editing
-			View control
-	TODO
-		[HIDDEN] Implement auto-save
-		Improve clipboard integration
-		Add more export formats
+Mind Map Test
+	Branch 1
+		Leaf 1.1
+		Leaf 1.2
+			Sub-leaf 1.2.1
+		Leaf 1.3
+	Branch 2
+		Leaf 2.1
+		Leaf 2.2
+		Leaf 2.3
+	Branch 3
+		Leaf 3.1
+			Deep 3.1.1
+				Deeper 3.1.1.1
+		Leaf 3.2

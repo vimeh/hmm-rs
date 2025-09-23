@@ -1,6 +1,4 @@
-use hmm_rs::{app, config, model, parser, ui};
-mod actions;
-mod event;
+use hmm_rs::{actions, app, config, event, model, parser, ui};
 
 use anyhow::Result;
 use app::AppState;
