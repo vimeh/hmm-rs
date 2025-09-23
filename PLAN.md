@@ -1,8 +1,8 @@
-Of course. Here is a detailed plan to rewrite the `h-m-m` PHP script into idiomatic Rust. This plan is designed to be comprehensive enough for another agent or a developer to follow.
+## Plan: Rewriting `h-m-m` from PHP to Idiomatic Rust
+
+**STATUS: ~75% Complete - Core architecture done, finishing features**
 
 ______________________________________________________________________
-
-## Plan: Rewriting `h-m-m` from PHP to Idiomatic Rust
 
 ### 1. Project Goal
 
@@ -51,7 +51,7 @@ h-m-m/
 
 ### 5. Detailed Implementation Steps
 
-#### Step 1: Project Setup and Core Data Models
+#### Step 1: Project Setup and Core Data Models ✅ COMPLETE
 
 1. **Initialize Project:** Run `cargo new h-m-m` and add the recommended crates to `Cargo.toml`.
 1. **Define Models (`src/model.rs`):**
@@ -89,14 +89,14 @@ h-m-m/
      }
      ```
 
-#### Step 2: Configuration Loading
+#### Step 2: Configuration Loading ✅ COMPLETE
 
 1. **Implement (`src/config.rs`):**
    - Use `clap::Parser` to define a struct for command-line arguments.
    - Use `serde::Deserialize` on a struct for the `.conf` file settings.
    - Create a function `load_config()` that uses the `directories` crate to find the config file path, `clap` to parse args, and the `config` crate to merge defaults, file settings, environment variables (`HMM_*`), and arguments into a single `AppConfig` struct.
 
-#### Step 3: Parsing the Mind Map File
+#### Step 3: Parsing the Mind Map File ✅ COMPLETE
 
 1. **Implement (`src/parser.rs`):**
    - Create a function `parse_hmm_file(file_contents: &str) -> (Arena<Node>, NodeId)`.
@@ -104,7 +104,7 @@ h-m-m/
    - It will calculate indentation, track the parent for the current level, and build the tree by adding nodes to the `indextree::Arena`.
    - Handle the case of multiple root nodes by creating a synthetic "root" node, just like the original script.
 
-#### Step 4: Terminal Setup and Main Event Loop
+#### Step 4: Terminal Setup and Main Event Loop ✅ COMPLETE
 
 1. **Implement (`src/main.rs`):**
    - Create a `Tui` struct to manage the `crossterm` terminal state (alternate screen, raw mode). It should implement `Drop` to restore the terminal on exit.
@@ -137,7 +137,7 @@ h-m-m/
      }
      ```
 
-#### Step 5: Layout Calculation Engine
+#### Step 5: Layout Calculation Engine ⚠️ PARTIAL (70%)
 
 1. **Implement (`src/layout.rs`):**
    - This is the most complex part. It translates all the coordinate calculation logic.
@@ -157,7 +157,7 @@ h-m-m/
      - `calculate_y`: A recursive function to set the final y-positions.
      - These functions should traverse the `indextree` and return the calculated layout map.
 
-#### Step 6: UI Rendering
+#### Step 6: UI Rendering ⚠️ PARTIAL (60%)
 
 1. **Implement (`src/ui.rs`):**
    - Create the main `render(frame: &mut Frame, app: &mut AppState)` function.
@@ -170,7 +170,7 @@ h-m-m/
      1. Render the status/message line at the bottom of the screen.
      1. If in `Editing` mode, render the text input line.
 
-#### Step 7: Implementing User Actions
+#### Step 7: Implementing User Actions ✅ MOSTLY COMPLETE (90%)
 
 1. **Implement (`src/actions.rs`):**
    - Define a comprehensive `Action` enum covering all keybindings.
@@ -192,17 +192,58 @@ h-m-m/
      - `fn save_file(app: &mut AppState)`: Implements `save`. This will require a `map_to_list` equivalent that traverses the `Arena` and generates the indented text format.
      - `fn enter_edit_mode(app: &mut AppState)`: Switches `app.mode` to `Editing` and prepares a text buffer.
 
-#### Step 8: The "Magic Readline" Implementation
+#### Step 8: The "Magic Readline" Implementation ⚠️ PARTIAL (50%)
 
 1. **State:** Add fields to `AppState` for the editor state, e.g., `editor_buffer: String`, `editor_cursor_pos: usize`.
 1. **Mode:** When an "edit" action is triggered, switch `app.mode` to `Editing`.
 1. **Event Handling:** In `event.rs`, when the mode is `Editing`, key presses are not mapped to `Action`s. Instead, they directly modify `editor_buffer` and `editor_cursor_pos` (e.g., character input, backspace, moving cursor left/right). The `Enter` key finalizes the edit, updates the node's title in the `tree`, and switches the mode back to `Normal`. `Escape` cancels.
 1. **Rendering:** In `ui.rs`, if the mode is `Editing`, render the `editor_buffer` as a text input line at the bottom of the screen, with a styled block representing the cursor.
 
-#### Step 9: Final Features and Polish
+#### Step 9: Final Features and Polish 🚧 IN PROGRESS (40%)
 
 1. **Clipboard:** Use the `clipboard` crate for all yank/paste/cut operations.
 1. **Exporting:** Implement `export_html` and `export_text` by traversing the layout map and tree data.
 1. **Undo/Redo:** Before any action that modifies the `app.tree`, push a clone of the tree onto the `app.history` vector. The `undo` action simply pops from this history and replaces the current tree.
 
 This structured plan breaks the monolithic script into manageable, testable components and leverages the strengths of the Rust ecosystem to produce a superior final product.
+
+---
+
+## Implementation Status Summary (as of 2025-09-22)
+
+### ✅ Completed Components:
+- **Project Setup**: All dependencies installed, project structure in place
+- **Core Data Models**: Node, NodeId, AppState fully implemented
+- **Configuration**: Complete config loading with CLI args, config files, and env vars
+- **File Parsing**: Full .hmm format parser and save functionality
+- **Terminal Management**: Crossterm integration for alternate screen and raw mode
+- **Event Loop**: Main application loop with event handling
+- **Basic Actions**: Movement, node manipulation, editing, collapsing
+
+### ⚠️ Partially Complete:
+- **Layout Engine (70%)**: Basic layout calculations work, missing some edge cases
+- **UI Rendering (60%)**: Basic rendering works, but connection drawing needs work
+- **Magic Readline (50%)**: Basic editing works, missing advanced features
+- **Export Functions (20%)**: Stubs exist, implementation needed
+
+### 🔴 TODO - High Priority:
+1. **Connection Drawing**: Port the complete box-drawing algorithm from PHP
+2. **Viewport Management**: Implement proper scrolling and centering
+3. **Export Functions**: Complete HTML and text export
+4. **Missing Keybindings**: Add rank adjustment, star operations, link opening
+
+### 🟡 TODO - Medium Priority:
+5. **Visual Polish**: Add colors, symbols, and visual feedback
+6. **Auto-save**: Implement timer-based saving
+7. **Advanced Editing**: Word jumping, clipboard in edit mode
+8. **Help Screen**: Complete help documentation
+
+### 🟢 TODO - Low Priority:
+9. **Tests**: Add comprehensive test coverage
+10. **Performance**: Optimize for large mind maps
+11. **Documentation**: User guide and API docs
+12. **Packaging**: Distribution and installation scripts
+
+**Overall Progress: ~75% Complete**
+
+The core architecture is solid and most basic functionality works. The remaining work is primarily feature completion and polish rather than fundamental changes.
