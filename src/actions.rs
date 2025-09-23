@@ -278,7 +278,7 @@ fn go_to_bottom(app: &mut AppState) {
                 return node_id;
             }
 
-            if let Some(last_child) = node_id.children(tree).last() {
+            if let Some(last_child) = node_id.children(tree).next_back() {
                 return find_last_visible(tree, last_child);
             }
 

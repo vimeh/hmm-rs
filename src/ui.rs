@@ -76,19 +76,14 @@ fn render_mind_map(frame: &mut Frame, app: &AppState, layout: &LayoutEngine, are
     frame.render_widget(paragraph, area);
 }
 
-fn draw_connections(
-    buffer: &mut Vec<Vec<char>>,
-    app: &AppState,
-    layout: &LayoutEngine,
-    area: Rect,
-) {
+fn draw_connections(buffer: &mut [Vec<char>], app: &AppState, layout: &LayoutEngine, area: Rect) {
     if let Some(root_id) = app.root_id {
         draw_node_connections(buffer, app, layout, root_id, area);
     }
 }
 
 fn draw_node_connections(
-    buffer: &mut Vec<Vec<char>>,
+    buffer: &mut [Vec<char>],
     app: &AppState,
     layout: &LayoutEngine,
     node_id: NodeId,
@@ -229,8 +224,8 @@ fn draw_node_connections(
 }
 
 fn draw_nodes(
-    buffer: &mut Vec<Vec<char>>,
-    style_buffer: &mut Vec<Vec<Style>>,
+    buffer: &mut [Vec<char>],
+    style_buffer: &mut [Vec<Style>],
     app: &AppState,
     layout: &LayoutEngine,
     area: Rect,
@@ -241,8 +236,8 @@ fn draw_nodes(
 }
 
 fn draw_node_content(
-    buffer: &mut Vec<Vec<char>>,
-    style_buffer: &mut Vec<Vec<Style>>,
+    buffer: &mut [Vec<char>],
+    style_buffer: &mut [Vec<Style>],
     app: &AppState,
     layout: &LayoutEngine,
     node_id: NodeId,
@@ -407,21 +402,21 @@ fn render_help(frame: &mut Frame, area: Rect) {
 }
 
 // Helper functions
-fn set_char(buffer: &mut Vec<Vec<char>>, x: usize, y: usize, ch: char) {
+fn set_char(buffer: &mut [Vec<char>], x: usize, y: usize, ch: char) {
     if y < buffer.len() && x < buffer[y].len() {
         buffer[y][x] = ch;
     }
 }
 
-fn draw_text(buffer: &mut Vec<Vec<char>>, x: usize, y: usize, text: &str) {
+fn draw_text(buffer: &mut [Vec<char>], x: usize, y: usize, text: &str) {
     for (i, ch) in text.chars().enumerate() {
         set_char(buffer, x + i, y, ch);
     }
 }
 
 fn draw_styled_text(
-    buffer: &mut Vec<Vec<char>>,
-    style_buffer: &mut Vec<Vec<Style>>,
+    buffer: &mut [Vec<char>],
+    style_buffer: &mut [Vec<Style>],
     x: usize,
     y: usize,
     text: &str,

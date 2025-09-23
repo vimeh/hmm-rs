@@ -27,6 +27,12 @@ pub struct LayoutEngine {
     pub map_bottom: f64,
 }
 
+impl Default for LayoutEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LayoutEngine {
     pub fn new() -> Self {
         Self {
@@ -380,7 +386,7 @@ mod tests {
         let mut app = create_test_app();
 
         // Mark a child as hidden
-        let child1_id = app.root_id.unwrap().children(&app.tree).nth(0).unwrap();
+        let child1_id = app.root_id.unwrap().children(&app.tree).next().unwrap();
         app.tree.get_mut(child1_id).unwrap().get_mut().title = "[HIDDEN] Child 1".to_string();
 
         // Hide hidden nodes
