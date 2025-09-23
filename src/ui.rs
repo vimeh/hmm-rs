@@ -149,18 +149,29 @@ fn draw_node_connections(
                     if children.len() > 1 {
                         let conn_x = if child_x > 4 { child_x - 4 } else { 0 };
 
+                        // Get first and last child positions to draw continuous vertical line
+                        let first_child_layout = layout.nodes.get(&children[0]);
+                        let last_child_layout = layout.nodes.get(&children[children.len() - 1]);
+
+                        if let (Some(first_layout), Some(last_layout)) = (first_child_layout, last_child_layout) {
+                            let first_y = (first_layout.y + first_layout.yo + first_layout.lh / 2.0 - app.viewport_top) as usize;
+                            let last_y = (last_layout.y + last_layout.yo + last_layout.lh / 2.0 - app.viewport_top) as usize;
+
+                            // Draw continuous vertical line from first to last child
+                            for y in first_y..=last_y.min(area.height as usize - 1) {
+                                if conn_x < area.width as usize && y < area.height as usize {
+                                    set_char(buffer, conn_x, y, '│');
+                                }
+                            }
+                        }
+
+                        // Now overlay the appropriate connector character for this child
                         if i == 0 {
                             // First child
                             set_char(buffer, conn_x, child_y, '╭');
-                            for y in child_y..parent_y.min(area.height as usize) {
-                                set_char(buffer, conn_x, y, '│');
-                            }
                         } else if i == children.len() - 1 {
                             // Last child
                             set_char(buffer, conn_x, child_y, '╰');
-                            for y in parent_y..child_y.min(area.height as usize) {
-                                set_char(buffer, conn_x, y, '│');
-                            }
                         } else {
                             // Middle children
                             set_char(buffer, conn_x, child_y, '├');
