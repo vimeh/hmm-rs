@@ -238,16 +238,15 @@ fn test_render_wide_tree() {
 
     // Create tree with very long node titles
     let root = app.tree.new_node(Node::new(
-        "This is a very long root node title that should wrap when displayed in the terminal".to_string()
+        "This is a very long root node title that should wrap when displayed in the terminal"
+            .to_string(),
     ));
 
     let child1 = app.tree.new_node(Node::new(
         "Another extremely long child node title that exceeds normal width constraints and needs proper text wrapping to display correctly".to_string()
     ));
 
-    let child2 = app.tree.new_node(Node::new(
-        "Short child".to_string()
-    ));
+    let child2 = app.tree.new_node(Node::new("Short child".to_string()));
 
     let grandchild = app.tree.new_node(Node::new(
         "This grandchild also has a considerably long title that will test the wrapping behavior at deeper levels of the tree structure".to_string()

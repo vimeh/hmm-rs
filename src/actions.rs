@@ -4,6 +4,7 @@ use crate::model::{Node, NodeId};
 use crate::parser;
 use anyhow::Result;
 use clipboard::{ClipboardContext, ClipboardProvider};
+use indextree::Arena;
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -645,15 +646,144 @@ fn save_as(app: &mut AppState) -> Result<()> {
 }
 
 fn export_html(app: &mut AppState) -> Result<()> {
-    // TODO: Implement HTML export
-    app.set_message("HTML export not yet implemented");
+    if app.filename.is_none() {
+        app.set_message(
+            "Can't export the map when it doesn't have a file name yet. Save it first.",
+        );
+        return Ok(());
+    }
+
+    let filename = format!("{}.html", app.filename.as_ref().unwrap().display());
+
+    if let Some(root_id) = app.root_id {
+        let root_node = app.tree.get(root_id).unwrap().get();
+        let root_title = &root_node.title;
+
+        let mut html = format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=yes">
+    <style>
+        body {{
+            background-color: #222;
+            color: #ddd;
+            padding: 20px;
+            font-family: monospace;
+            font-size: 16px;
+            line-height: 1.6;
+        }}
+        #root {{
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding: 10px;
+            border-bottom: 2px solid #444;
+        }}
+        details {{
+            margin-left: 20px;
+            margin-top: 10px;
+        }}
+        summary {{
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 3px;
+        }}
+        summary:hover {{
+            background-color: #333;
+        }}
+        p {{
+            margin: 5px 0 5px 20px;
+            padding: 5px;
+        }}
+    </style>
+</head>
+<body>
+"#,
+            root_title
+        );
+
+        // Generate the HTML tree
+        html.push_str(&export_html_node(&app.tree, root_id, true));
+
+        html.push_str("</body>\n</html>\n");
+
+        // Write to file
+        std::fs::write(&filename, html)?;
+
+        app.set_message(format!("Exported to {}", filename));
+    }
+
     Ok(())
 }
 
+fn export_html_node(tree: &Arena<Node>, node_id: NodeId, is_root: bool) -> String {
+    let node = tree.get(node_id).unwrap().get();
+    let mut output = String::new();
+
+    // Get visible children (not collapsed)
+    let visible_children: Vec<NodeId> = if !node.is_collapsed {
+        node_id.children(tree).collect()
+    } else {
+        vec![]
+    };
+
+    if is_root {
+        // Root node
+        output.push_str(&format!("<div id=\"root\">{}</div>\n", node.title));
+        for child_id in visible_children {
+            output.push_str(&export_html_node(tree, child_id, false));
+        }
+    } else if visible_children.is_empty() {
+        // Leaf node or collapsed node
+        output.push_str(&format!("<p>{}</p>\n", node.title));
+    } else {
+        // Node with children
+        output.push_str("<details>\n");
+        output.push_str(&format!("<summary>{}</summary>\n", node.title));
+        for child_id in visible_children {
+            output.push_str(&export_html_node(tree, child_id, false));
+        }
+        output.push_str("</details>\n");
+    }
+
+    output
+}
+
 fn export_text(app: &mut AppState) -> Result<()> {
-    // TODO: Implement text export
-    app.set_message("Text export not yet implemented");
+    if let Some(root_id) = app.root_id {
+        // Export the entire visible tree to text format
+        let mut output = String::new();
+        export_text_node(&app.tree, root_id, &mut output, 0);
+
+        // Copy to clipboard
+        if let Ok(mut ctx) = ClipboardContext::new() {
+            let _ = ctx.set_contents(output.clone());
+        }
+        app.clipboard = Some(output);
+
+        app.set_message("Exported the map to clipboard.");
+    }
+
     Ok(())
+}
+
+fn export_text_node(tree: &Arena<Node>, node_id: NodeId, output: &mut String, depth: usize) {
+    let node = tree.get(node_id).unwrap().get();
+
+    // Add the current node with proper indentation
+    output.push_str(&"\t".repeat(depth));
+    output.push_str(&node.title);
+    output.push('\n');
+
+    // Process children if node is not collapsed
+    if !node.is_collapsed {
+        for child_id in node_id.children(tree) {
+            export_text_node(tree, child_id, output, depth + 1);
+        }
+    }
 }
 
 // Clipboard functions
@@ -1082,7 +1212,10 @@ mod tests {
         // The active node should be valid and not removed
         if let Some(active_id) = app.active_node_id {
             let active_node = app.tree.get(active_id).expect("Active node should exist");
-            assert!(!active_node.is_removed(), "Active node should not be removed");
+            assert!(
+                !active_node.is_removed(),
+                "Active node should not be removed"
+            );
         }
 
         // Verify clipboard has the deleted content
@@ -1090,7 +1223,10 @@ mod tests {
 
         // Verify that the node is no longer a child of root
         let remaining_children: Vec<_> = root.children(&app.tree).collect();
-        assert!(!remaining_children.contains(&child1_id), "Child1 should not be in root's children");
+        assert!(
+            !remaining_children.contains(&child1_id),
+            "Child1 should not be in root's children"
+        );
 
         // Should only have one child left (Child2 with its Grandchild)
         assert_eq!(remaining_children.len(), 1);
@@ -1310,7 +1446,13 @@ mod tests {
         let mut app = create_test_app();
 
         // The initial tree should have "Root" as the title
-        let initial_title = app.tree.get(app.root_id.unwrap()).unwrap().get().title.clone();
+        let initial_title = app
+            .tree
+            .get(app.root_id.unwrap())
+            .unwrap()
+            .get()
+            .title
+            .clone();
         assert_eq!(initial_title, "Root");
 
         // Save initial state to history
@@ -1325,24 +1467,39 @@ mod tests {
         app.tree.get_mut(root).unwrap().get_mut().title = "Modified2".to_string();
 
         // Verify we have the current state
-        assert_eq!(app.tree.get(app.root_id.unwrap()).unwrap().get().title, "Modified2");
+        assert_eq!(
+            app.tree.get(app.root_id.unwrap()).unwrap().get().title,
+            "Modified2"
+        );
 
         // Undo - should go back to "Modified" (the last saved state)
         undo(&mut app);
-        assert_eq!(app.tree.get(app.root_id.unwrap()).unwrap().get().title, "Modified");
+        assert_eq!(
+            app.tree.get(app.root_id.unwrap()).unwrap().get().title,
+            "Modified"
+        );
 
         // Undo again - should go back to "Root"
         undo(&mut app);
-        assert_eq!(app.tree.get(app.root_id.unwrap()).unwrap().get().title, "Root");
+        assert_eq!(
+            app.tree.get(app.root_id.unwrap()).unwrap().get().title,
+            "Root"
+        );
 
         // Redo - should go forward to "Modified"
         redo(&mut app);
-        assert_eq!(app.tree.get(app.root_id.unwrap()).unwrap().get().title, "Modified");
+        assert_eq!(
+            app.tree.get(app.root_id.unwrap()).unwrap().get().title,
+            "Modified"
+        );
 
         // Redo again - should not change since we lost "Modified2" when we did undo
         redo(&mut app);
         assert!(app.message.is_some()); // Should have "Nothing to redo" message
-        assert_eq!(app.tree.get(app.root_id.unwrap()).unwrap().get().title, "Modified");
+        assert_eq!(
+            app.tree.get(app.root_id.unwrap()).unwrap().get().title,
+            "Modified"
+        );
     }
 
     #[test]
@@ -1385,7 +1542,11 @@ mod tests {
         // Note: They may still appear in children() iterator, but should be marked as removed
         for child_id in initial_children {
             if let Some(node) = app.tree.get(child_id) {
-                assert!(node.is_removed(), "Child {:?} should be marked as removed", child_id);
+                assert!(
+                    node.is_removed(),
+                    "Child {:?} should be marked as removed",
+                    child_id
+                );
             }
         }
 
@@ -1442,6 +1603,59 @@ mod tests {
 
         // Should be at the root (first visible node)
         assert_eq!(app.active_node_id, Some(root));
+    }
+
+    #[test]
+    fn test_export_text() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+
+        // Collapse Child 2 to test visible-only export
+        let children: Vec<_> = root.children(&app.tree).collect();
+        let child2 = children[1]; // Child 2 has the grandchild
+        app.tree.get_mut(child2).unwrap().get_mut().is_collapsed = true;
+
+        export_text(&mut app).unwrap();
+
+        // Check clipboard contains exported text
+        assert!(app.clipboard.is_some());
+        let exported = app.clipboard.as_ref().unwrap();
+
+        // Should contain root and both children
+        assert!(exported.contains("Root"));
+        assert!(exported.contains("Child 1"));
+        assert!(exported.contains("Child 2"));
+
+        // Should not contain grandchild of collapsed Child 2
+        assert!(!exported.contains("Grandchild"));
+    }
+
+    #[test]
+    fn test_export_html() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let mut app = create_test_app();
+
+        // Set a filename so export can work
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.hmm");
+        app.filename = Some(test_file.clone());
+
+        export_html(&mut app).unwrap();
+
+        // Check HTML file was created
+        let html_file = temp_dir.path().join("test.hmm.html");
+        assert!(html_file.exists());
+
+        // Read and validate HTML content
+        let html_content = fs::read_to_string(html_file).unwrap();
+        assert!(html_content.contains("<!DOCTYPE html>"));
+        assert!(html_content.contains("<title>Root</title>"));
+        assert!(html_content.contains("<div id=\"root\">Root</div>"));
+        assert!(html_content.contains("Child 1")); // Child 1 is a leaf, so it's a <p> not <summary>
+        assert!(html_content.contains("<summary>Child 2</summary>")); // Child 2 has children
+        assert!(html_content.contains("<p>Grandchild</p>"));
     }
 
     #[test]

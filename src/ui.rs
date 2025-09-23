@@ -95,7 +95,8 @@ fn draw_node_connections(
         // Get visible children
         let all_children: Vec<NodeId> = node_id.children(&app.tree).collect();
         let visible_children: Vec<NodeId> = if !app.config.show_hidden {
-            all_children.iter()
+            all_children
+                .iter()
                 .filter(|cid| {
                     let child = app.tree.get(**cid).unwrap().get();
                     !child.is_hidden()
@@ -115,7 +116,8 @@ fn draw_node_connections(
         const CONN_RIGHT_LEN: usize = 4;
 
         // Calculate node middle Y position
-        let node_middle_y = (node_layout.y + node_layout.yo + node_layout.lh / 2.0 - 0.6).round() as i32;
+        let node_middle_y =
+            (node_layout.y + node_layout.yo + node_layout.lh / 2.0 - 0.6).round() as i32;
 
         // Case 1: Node is collapsed with children
         if node.is_collapsed && num_children > 0 {
@@ -149,19 +151,26 @@ fn draw_node_connections(
         if num_visible_children == 1 {
             let child_id = visible_children[0];
             if let Some(child_layout) = layout.nodes.get(&child_id) {
-
                 let y1 = node_middle_y;
-                let y2 = (child_layout.y + child_layout.yo + child_layout.lh / 2.0 - 0.6).round() as i32;
+                let y2 =
+                    (child_layout.y + child_layout.yo + child_layout.lh / 2.0 - 0.6).round() as i32;
 
                 // Calculate x position based on alignment setting
                 let x = if app.config.align_levels {
                     (node_layout.x + node_layout.w - 2.0 - app.viewport_left) as i32
                 } else {
-                    (child_layout.x - CONN_LEFT_LEN as f64 - CONN_RIGHT_LEN as f64 - app.viewport_left) as i32
+                    (child_layout.x
+                        - CONN_LEFT_LEN as f64
+                        - CONN_RIGHT_LEN as f64
+                        - app.viewport_left) as i32
                 };
 
                 // Build the horizontal line
-                let line_prefix = if has_hidden_children { "─╫" } else { "──" };
+                let line_prefix = if has_hidden_children {
+                    "─╫"
+                } else {
+                    "──"
+                };
                 let line_len = if app.config.align_levels {
                     (child_layout.x - node_layout.x - node_layout.w - 1.0).max(0.0) as usize
                 } else {
@@ -169,12 +178,26 @@ fn draw_node_connections(
                 };
 
                 // Draw horizontal line
-                if x >= 0 && y1.min(y2) >= 0 && x < area.width as i32 && y1.min(y2) < area.height as i32 {
-                    draw_text(buffer, x as usize, y1.min(y2) as usize - app.viewport_top as usize, line_prefix);
+                if x >= 0
+                    && y1.min(y2) >= 0
+                    && x < area.width as i32
+                    && y1.min(y2) < area.height as i32
+                {
+                    draw_text(
+                        buffer,
+                        x as usize,
+                        y1.min(y2) as usize - app.viewport_top as usize,
+                        line_prefix,
+                    );
                     for i in 0..line_len {
                         let px = x + line_prefix.len() as i32 + i as i32;
                         if px >= 0 && px < area.width as i32 {
-                            set_char(buffer, px as usize, y1.min(y2) as usize - app.viewport_top as usize, '─');
+                            set_char(
+                                buffer,
+                                px as usize,
+                                y1.min(y2) as usize - app.viewport_top as usize,
+                                '─',
+                            );
                         }
                     }
                 }
@@ -186,21 +209,43 @@ fn draw_node_connections(
                     // Draw vertical line
                     for y in y1.min(y2)..y1.max(y2) {
                         let py = y - app.viewport_top as i32;
-                        if vert_x >= 0 && py >= 0 && vert_x < area.width as i32 && py < area.height as i32 {
+                        if vert_x >= 0
+                            && py >= 0
+                            && vert_x < area.width as i32
+                            && py < area.height as i32
+                        {
                             set_char(buffer, vert_x as usize, py as usize, '│');
                         }
                     }
 
                     // Draw corner at child position
                     let py2 = y2 - app.viewport_top as i32;
-                    if vert_x >= 0 && py2 >= 0 && vert_x < area.width as i32 && py2 < area.height as i32 {
-                        set_char(buffer, vert_x as usize, py2 as usize, if y2 > y1 { '╰' } else { '╭' });
+                    if vert_x >= 0
+                        && py2 >= 0
+                        && vert_x < area.width as i32
+                        && py2 < area.height as i32
+                    {
+                        set_char(
+                            buffer,
+                            vert_x as usize,
+                            py2 as usize,
+                            if y2 > y1 { '╰' } else { '╭' },
+                        );
                     }
 
                     // Draw corner at parent level
                     let py_min = y1.min(y2) - app.viewport_top as i32;
-                    if vert_x >= 0 && py_min >= 0 && vert_x < area.width as i32 && py_min < area.height as i32 {
-                        set_char(buffer, vert_x as usize, py_min as usize, if y2 > y1 { '╮' } else { '╯' });
+                    if vert_x >= 0
+                        && py_min >= 0
+                        && vert_x < area.width as i32
+                        && py_min < area.height as i32
+                    {
+                        set_char(
+                            buffer,
+                            vert_x as usize,
+                            py_min as usize,
+                            if y2 > y1 { '╮' } else { '╯' },
+                        );
                     }
                 }
             }
@@ -234,11 +279,18 @@ fn draw_node_connections(
                 let x = if app.config.align_levels {
                     (node_layout.x + node_layout.w - 2.0 - app.viewport_left) as i32
                 } else {
-                    (top_child_layout.x - CONN_LEFT_LEN as f64 - CONN_RIGHT_LEN as f64 - app.viewport_left) as i32
+                    (top_child_layout.x
+                        - CONN_LEFT_LEN as f64
+                        - CONN_RIGHT_LEN as f64
+                        - app.viewport_left) as i32
                 };
 
                 // Draw horizontal line from parent
-                let line_prefix = if has_hidden_children { "─╫" } else { "──" };
+                let line_prefix = if has_hidden_children {
+                    "─╫"
+                } else {
+                    "──"
+                };
                 let line_len = if app.config.align_levels {
                     (top_child_layout.x - node_layout.x - node_layout.w - 3.0).max(0.0) as usize
                 } else {
@@ -257,25 +309,38 @@ fn draw_node_connections(
                 }
 
                 // Vertical line position
-                let vert_x = (top_child_layout.x - CONN_RIGHT_LEN as f64 - app.viewport_left) as i32;
+                let vert_x =
+                    (top_child_layout.x - CONN_RIGHT_LEN as f64 - app.viewport_left) as i32;
 
                 // Draw vertical line spanning all children
                 for y in top_y..bottom_y {
                     let py = y - app.viewport_top as i32;
-                    if vert_x >= 0 && py >= 0 && vert_x < area.width as i32 && py < area.height as i32 {
+                    if vert_x >= 0
+                        && py >= 0
+                        && vert_x < area.width as i32
+                        && py < area.height as i32
+                    {
                         set_char(buffer, vert_x as usize, py as usize, '│');
                     }
                 }
 
                 // Draw top corner
                 let top_py = top_y - app.viewport_top as i32;
-                if vert_x >= 0 && top_py >= 0 && vert_x < area.width as i32 && top_py < area.height as i32 {
+                if vert_x >= 0
+                    && top_py >= 0
+                    && vert_x < area.width as i32
+                    && top_py < area.height as i32
+                {
                     draw_text(buffer, vert_x as usize, top_py as usize, "╭──");
                 }
 
                 // Draw bottom corner
                 let bot_py = bottom_y - app.viewport_top as i32;
-                if vert_x >= 0 && bot_py >= 0 && vert_x < area.width as i32 && bot_py < area.height as i32 {
+                if vert_x >= 0
+                    && bot_py >= 0
+                    && vert_x < area.width as i32
+                    && bot_py < area.height as i32
+                {
                     draw_text(buffer, vert_x as usize, bot_py as usize, "╰──");
                 }
 
@@ -283,9 +348,14 @@ fn draw_node_connections(
                 for &child_id in &visible_children {
                     if child_id != top_child && child_id != bottom_child {
                         if let Some(child_layout) = layout.nodes.get(&child_id) {
-                            let cy = (child_layout.y + child_layout.yo + child_layout.lh / 2.0 - 0.2) as i32;
+                            let cy = (child_layout.y + child_layout.yo + child_layout.lh / 2.0
+                                - 0.2) as i32;
                             let py = cy - app.viewport_top as i32;
-                            if vert_x >= 0 && py >= 0 && vert_x < area.width as i32 && py < area.height as i32 {
+                            if vert_x >= 0
+                                && py >= 0
+                                && vert_x < area.width as i32
+                                && py < area.height as i32
+                            {
                                 draw_text(buffer, vert_x as usize, py as usize, "├──");
                             }
                         }
@@ -294,7 +364,11 @@ fn draw_node_connections(
 
                 // Fix junction points
                 let middle_py = middle - app.viewport_top as i32;
-                if vert_x >= 0 && middle_py >= 0 && vert_x < area.width as i32 && middle_py < area.height as i32 {
+                if vert_x >= 0
+                    && middle_py >= 0
+                    && vert_x < area.width as i32
+                    && middle_py < area.height as i32
+                {
                     let existing = buffer[middle_py as usize][vert_x as usize];
                     let replacement = match existing {
                         '│' => '┤',
