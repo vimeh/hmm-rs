@@ -3,9 +3,9 @@ source: tests/snapshot_test.rs
 expression: terminal.backend()
 ---
 "                                                                                "
-"                  ├──────Features───────────✗ Failed Task                       "
+"                  ╭──────Features───────────✗ Failed Task                       "
 "                  │                                                             "
-" Mind Map Root────│                      ├──────model.rs                        "
+" Mind Map Root────│                      ╭──────model.rs                        "
 "                  ╰──────Architecture────│                                      "
 "                                         ╰──────ui.rs                           "
 "                                                                                "

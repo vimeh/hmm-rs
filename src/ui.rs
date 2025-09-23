@@ -2,11 +2,11 @@ use crate::app::{AppMode, AppState};
 use crate::layout::LayoutEngine;
 use crate::model::NodeId;
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
+    Frame,
 };
 
 pub fn render(frame: &mut Frame, app: &mut AppState) {
@@ -120,8 +120,8 @@ fn draw_node_connections(
         } else if !children.is_empty() {
             // Draw connections to children
             let parent_x = (node_layout.x + node_layout.w - app.viewport_left) as usize;
-            let parent_y = (node_layout.y + node_layout.yo + node_layout.lh / 2.0
-                - app.viewport_top) as usize;
+            let parent_y =
+                (node_layout.y + node_layout.yo + node_layout.lh / 2.0 - app.viewport_top) as usize;
 
             // Draw horizontal line from parent node text
             if parent_x < area.width as usize && parent_y < area.height as usize {
@@ -133,31 +133,34 @@ fn draw_node_connections(
             // Calculate vertical connector position (right after parent's horizontal line)
             let conn_x = parent_x + 4;
 
-                // Get first and last child positions
-                if let (Some(first_layout), Some(last_layout)) =
-                    (layout.nodes.get(&children[0]), layout.nodes.get(&children[children.len() - 1])) {
+            // Get first and last child positions
+            if let (Some(first_layout), Some(last_layout)) = (
+                layout.nodes.get(&children[0]),
+                layout.nodes.get(&children[children.len() - 1]),
+            ) {
+                let first_y = (first_layout.y + first_layout.yo + first_layout.lh / 2.0
+                    - app.viewport_top) as usize;
+                let last_y = (last_layout.y + last_layout.yo + last_layout.lh / 2.0
+                    - app.viewport_top) as usize;
 
-                    let first_y = (first_layout.y + first_layout.yo + first_layout.lh / 2.0 - app.viewport_top) as usize;
-                    let last_y = (last_layout.y + last_layout.yo + last_layout.lh / 2.0 - app.viewport_top) as usize;
-
-                    // Draw continuous vertical line from parent level to last child
-                    if conn_x < area.width as usize {
-                        // Connect from parent y to first child
-                        if parent_y < first_y {
-                            for y in parent_y..first_y {
-                                if y < area.height as usize {
-                                    set_char(buffer, conn_x, y, '│');
-                                }
-                            }
-                        }
-                        // Draw through all children
-                        for y in first_y..=last_y.min(area.height as usize - 1) {
+                // Draw continuous vertical line from parent level to last child
+                if conn_x < area.width as usize {
+                    // Connect from parent y to first child
+                    if parent_y < first_y {
+                        for y in parent_y..first_y {
                             if y < area.height as usize {
                                 set_char(buffer, conn_x, y, '│');
                             }
                         }
                     }
+                    // Draw through all children
+                    for y in first_y..=last_y.min(area.height as usize - 1) {
+                        if y < area.height as usize {
+                            set_char(buffer, conn_x, y, '│');
+                        }
+                    }
                 }
+            }
 
             // Now draw horizontal connectors for each child
             for (i, child_id) in children.iter().enumerate() {
@@ -186,7 +189,7 @@ fn draw_node_connections(
                             set_char(buffer, conn_x, child_y, '─');
                         } else if i == 0 {
                             // First child of multiple
-                            set_char(buffer, conn_x, child_y, '├');
+                            set_char(buffer, conn_x, child_y, '╭');
                         } else if i == children.len() - 1 {
                             // Last child
                             set_char(buffer, conn_x, child_y, '╰');
