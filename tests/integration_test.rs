@@ -201,7 +201,7 @@ fn test_viewport_navigation() {
 
     // Move down beyond visible area (this would trigger scrolling in a real app)
     // The actual viewport adjustment happens in the render phase
-    let last_child = root.children(&app.tree).last().unwrap();
+    let last_child = root.children(&app.tree).next_back().unwrap();
     app.active_node_id = Some(last_child);
 
     // Test center lock functionality
