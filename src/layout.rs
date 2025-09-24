@@ -1,5 +1,6 @@
 use crate::app::AppState;
 use crate::model::NodeId;
+use crate::ui::text::TextWrapper;
 use std::collections::HashMap;
 use unicode_width::UnicodeWidthStr;
 
@@ -134,7 +135,7 @@ impl LayoutEngine {
         let title_width = node.title.width();
         let (w, lh) = if title_width as f32 > WRAP_THRESHOLD_RATIO * max_width as f32 {
             // Need to wrap text
-            let lines = wrap_text(&node.title, max_width);
+            let lines = TextWrapper::wrap(&node.title, max_width);
             let max_line_width = lines.iter().map(|l| l.width()).max().unwrap_or(0);
             (max_line_width as f64, lines.len() as f64)
         } else {
@@ -265,45 +266,6 @@ impl LayoutEngine {
     }
 }
 
-/// Wrap text to fit within a maximum width, breaking at word boundaries
-fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
-    let words: Vec<&str> = text.split_whitespace().collect();
-    if words.is_empty() {
-        return vec![text.to_string()];
-    }
-
-    let mut lines = Vec::new();
-    let mut current_line = String::new();
-    let mut current_width = 0;
-
-    for word in words {
-        let word_width = word.width();
-        let needs_space = !current_line.is_empty();
-        let space_width = if needs_space { 1 } else { 0 };
-
-        if current_width > 0 && current_width + space_width + word_width > max_width {
-            // Start a new line
-            lines.push(current_line);
-            current_line = word.to_string();
-            current_width = word_width;
-        } else {
-            // Add to current line
-            if needs_space {
-                current_line.push(' ');
-                current_width += 1;
-            }
-            current_line.push_str(word);
-            current_width += word_width;
-        }
-    }
-
-    if !current_line.is_empty() {
-        lines.push(current_line);
-    }
-
-    lines
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -384,31 +346,16 @@ mod tests {
     }
 
     #[test]
-    fn test_wrap_text() {
+    fn test_text_wrapping_via_textwrapper() {
+        // Test that TextWrapper works correctly for our use case
         let text = "This is a very long line that should be wrapped";
-        let lines = wrap_text(text, 15);
+        let lines = TextWrapper::wrap(text, 15);
 
         assert!(lines.len() > 1);
         for line in &lines {
-            assert!(line.len() <= 15);
+            // Note: TextWrapper uses unicode width, not byte length
+            assert!(unicode_width::UnicodeWidthStr::width(line.as_str()) <= 15);
         }
-    }
-
-    #[test]
-    fn test_wrap_text_single_word() {
-        let text = "SingleWord";
-        let lines = wrap_text(text, 20);
-
-        assert_eq!(lines.len(), 1);
-        assert_eq!(lines[0], "SingleWord");
-    }
-
-    #[test]
-    fn test_wrap_text_unicode() {
-        let text = "这是一段中文文本 with mixed 内容";
-        let lines = wrap_text(text, 20);
-
-        assert!(!lines.is_empty());
     }
 
     #[test]

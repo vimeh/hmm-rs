@@ -4,7 +4,7 @@ mod constants;
 mod help;
 mod mindmap;
 mod status_line;
-mod text;
+pub mod text;
 
 #[cfg(test)]
 mod tests;
