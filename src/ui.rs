@@ -630,7 +630,10 @@ mod tests {
     fn test_connection_line_constants() {
         // Verify single child connection is 5 dashes
         assert_eq!(
-            SINGLE_CHILD_CONNECTION.chars().filter(|&c| c == '─').count(),
+            SINGLE_CHILD_CONNECTION
+                .chars()
+                .filter(|&c| c == '─')
+                .count(),
             5,
             "Single child connection should have exactly 5 dashes"
         );
@@ -692,8 +695,10 @@ mod tests {
         // Check that 5 dashes were drawn starting at position 5
         for i in 0..5 {
             assert_eq!(
-                buffer[2][5 + i], '─',
-                "Dash should be at position {}", 5 + i
+                buffer[2][5 + i],
+                '─',
+                "Dash should be at position {}",
+                5 + i
             );
         }
 
