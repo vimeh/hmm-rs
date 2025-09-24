@@ -124,10 +124,11 @@ pub enum Action {
 pub fn execute_action(action: Action, app: &mut AppState) -> Result<()> {
     match action {
         Action::Quit => {
-            if app.filename.is_some() {
-                // TODO: Check for unsaved changes
+            if app.is_dirty {
+                app.set_message("Unsaved changes! Press Shift+Q to force quit or 's' to save");
+            } else {
+                app.running = false;
             }
-            app.running = false;
         }
         Action::ForceQuit => {
             app.running = false;

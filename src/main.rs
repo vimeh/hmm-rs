@@ -11,6 +11,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
+use std::time::{Duration, Instant};
 
 fn main() -> Result<()> {
     // Parse command line arguments
@@ -91,8 +92,22 @@ fn run_app<B: ratatui::backend::Backend>(
         }
 
         // Auto-save if enabled
-        if app.config.auto_save && app.filename.is_some() {
-            // TODO: Implement auto-save timer
+        if app.config.auto_save && app.filename.is_some() && app.is_dirty {
+            let should_save = if let Some(last_modify) = app.last_modify_time {
+                // Check if enough time has passed since last modification
+                let elapsed = Instant::now().duration_since(last_modify);
+                elapsed >= Duration::from_secs(app.config.auto_save_interval as u64)
+            } else {
+                false
+            };
+
+            if should_save {
+                if let Err(e) = actions::save(app) {
+                    app.set_message(format!("Auto-save failed: {}", e));
+                } else {
+                    app.last_save_time = Some(Instant::now());
+                }
+            }
         }
     }
 

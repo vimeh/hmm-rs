@@ -196,6 +196,8 @@ pub fn confirm_edit(app: &mut AppState) {
 
         if let Some(node) = app.tree.get_mut(active_id) {
             node.get_mut().title = new_title;
+            app.is_dirty = true;
+            app.last_modify_time = Some(std::time::Instant::now());
         }
     }
     app.mode = AppMode::Normal;

@@ -4,22 +4,50 @@ use crate::parser;
 use anyhow::Result;
 use clipboard::{ClipboardContext, ClipboardProvider};
 use indextree::Arena;
+use std::path::PathBuf;
 
 pub fn save(app: &mut AppState) -> Result<()> {
     if let Some(ref path) = app.filename {
         if let Some(root_id) = app.root_id {
-            parser::save_file(&app.tree, root_id, path)?;
-            app.set_message("File saved");
+            match parser::save_file(&app.tree, root_id, path) {
+                Ok(_) => {
+                    app.set_message(format!("Saved to {}", path.display()));
+                    app.is_dirty = false;
+                }
+                Err(e) => {
+                    app.set_message(format!("Failed to save: {}", e));
+                    return Err(e);
+                }
+            }
+        } else {
+            app.set_message("No content to save");
         }
     } else {
-        app.set_message("No filename set");
+        app.set_message("No filename set - use Shift+S for Save As");
     }
     Ok(())
 }
 
 pub fn save_as(app: &mut AppState) -> Result<()> {
-    // TODO: Implement file dialog
-    app.set_message("Save As not yet implemented");
+    // For now, we'll save with a default name
+    // In a real implementation, this would open a file dialog
+    let default_path = PathBuf::from("mindmap.hmm");
+
+    if let Some(root_id) = app.root_id {
+        match parser::save_file(&app.tree, root_id, &default_path) {
+            Ok(_) => {
+                app.filename = Some(default_path.clone());
+                app.is_dirty = false;
+                app.set_message(format!("Saved as {}", default_path.display()));
+            }
+            Err(e) => {
+                app.set_message(format!("Failed to save: {}", e));
+                return Err(e);
+            }
+        }
+    } else {
+        app.set_message("No content to save");
+    }
     Ok(())
 }
 

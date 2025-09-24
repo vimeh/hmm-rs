@@ -39,6 +39,13 @@ pub struct AppState {
 
     // Clipboard
     pub clipboard: Option<String>,
+
+    // Track unsaved changes
+    pub is_dirty: bool,
+
+    // Auto-save tracking
+    pub last_save_time: Option<std::time::Instant>,
+    pub last_modify_time: Option<std::time::Instant>,
 }
 
 impl AppState {
@@ -63,6 +70,9 @@ impl AppState {
             search_results: Vec::new(),
             search_index: 0,
             clipboard: None,
+            is_dirty: false,
+            last_save_time: None,
+            last_modify_time: None,
         }
     }
 

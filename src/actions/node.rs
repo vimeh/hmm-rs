@@ -15,6 +15,9 @@ pub fn insert_sibling(app: &mut AppState) {
         }
 
         app.active_node_id = Some(new_node);
+        app.is_dirty = true;
+        app.last_modify_time = Some(std::time::Instant::now());
+        app.last_modify_time = Some(std::time::Instant::now());
         start_editing(app, true);
     }
 }
@@ -32,6 +35,9 @@ pub fn insert_child(app: &mut AppState) {
         }
 
         app.active_node_id = Some(new_node);
+        app.is_dirty = true;
+        app.last_modify_time = Some(std::time::Instant::now());
+        app.last_modify_time = Some(std::time::Instant::now());
         start_editing(app, true);
     }
 }
@@ -66,6 +72,8 @@ pub fn delete_node(app: &mut AppState) {
         }
 
         active_id.remove(&mut app.tree);
+        app.is_dirty = true;
+        app.last_modify_time = Some(std::time::Instant::now());
     }
 }
 
@@ -77,6 +85,8 @@ pub fn delete_children(app: &mut AppState) {
         for child_id in children {
             child_id.remove(&mut app.tree);
         }
+        app.is_dirty = true;
+        app.last_modify_time = Some(std::time::Instant::now());
     }
 }
 
@@ -85,6 +95,8 @@ pub fn move_node_up(app: &mut AppState) {
         if let Some(prev_sibling) = active_id.preceding_siblings(&app.tree).nth(1) {
             app.push_history();
             prev_sibling.insert_before(active_id, &mut app.tree);
+            app.is_dirty = true;
+            app.last_modify_time = Some(std::time::Instant::now());
         }
     }
 }
@@ -94,6 +106,8 @@ pub fn move_node_down(app: &mut AppState) {
         if let Some(next_sibling) = active_id.following_siblings(&app.tree).nth(1) {
             app.push_history();
             next_sibling.insert_after(active_id, &mut app.tree);
+            app.is_dirty = true;
+            app.last_modify_time = Some(std::time::Instant::now());
         }
     }
 }

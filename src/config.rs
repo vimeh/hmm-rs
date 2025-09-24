@@ -67,6 +67,9 @@ pub struct AppConfig {
     #[serde(default = "default_auto_save")]
     pub auto_save: bool,
 
+    #[serde(default = "default_auto_save_interval")]
+    pub auto_save_interval: usize,
+
     #[serde(default = "default_echo_keys")]
     pub echo_keys: bool,
 
@@ -108,6 +111,7 @@ impl Default for AppConfig {
             focus_lock: default_focus_lock(),
             max_undo_steps: default_max_undo_steps(),
             auto_save: default_auto_save(),
+            auto_save_interval: default_auto_save_interval(),
             echo_keys: default_echo_keys(),
             post_export_command: default_post_export_command(),
             clipboard: default_clipboard(),
@@ -150,6 +154,10 @@ fn default_max_undo_steps() -> usize {
 }
 fn default_auto_save() -> bool {
     false
+}
+
+fn default_auto_save_interval() -> usize {
+    30 // 30 seconds default
 }
 fn default_echo_keys() -> bool {
     false
