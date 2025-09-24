@@ -83,7 +83,6 @@ fn handle_normal_mode(key: KeyEvent) -> Option<Action> {
         (Char('S'), KeyModifiers::SHIFT) => Some(Action::SaveAs),
 
         // Export
-        (Char('x'), KeyModifiers::NONE) => Some(Action::ExportHtml),
         (Char('X'), KeyModifiers::SHIFT) => Some(Action::ExportText),
 
         // Clipboard

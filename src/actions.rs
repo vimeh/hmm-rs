@@ -64,7 +64,6 @@ pub enum Action {
     // File operations
     Save,
     SaveAs,
-    ExportHtml,
     ExportText,
 
     // Clipboard
@@ -168,7 +167,6 @@ pub fn execute_action(action: Action, app: &mut AppState) -> Result<()> {
         // File operations
         Action::Save => save(app)?,
         Action::SaveAs => save_as(app)?,
-        Action::ExportHtml => export_html(app)?,
         Action::ExportText => export_text(app)?,
 
         // Clipboard
@@ -772,113 +770,6 @@ fn save_as(app: &mut AppState) -> Result<()> {
     // TODO: Implement file dialog
     app.set_message("Save As not yet implemented");
     Ok(())
-}
-
-fn export_html(app: &mut AppState) -> Result<()> {
-    if app.filename.is_none() {
-        app.set_message(
-            "Can't export the map when it doesn't have a file name yet. Save it first.",
-        );
-        return Ok(());
-    }
-
-    let filename = format!("{}.html", app.filename.as_ref().unwrap().display());
-
-    if let Some(root_id) = app.root_id {
-        let root_node = app.tree.get(root_id).unwrap().get();
-        let root_title = &root_node.title;
-
-        let mut html = format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>{}</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=yes">
-    <style>
-        body {{
-            background-color: #222;
-            color: #ddd;
-            padding: 20px;
-            font-family: monospace;
-            font-size: 16px;
-            line-height: 1.6;
-        }}
-        #root {{
-            font-size: 1.5em;
-            font-weight: bold;
-            margin-bottom: 20px;
-            padding: 10px;
-            border-bottom: 2px solid #444;
-        }}
-        details {{
-            margin-left: 20px;
-            margin-top: 10px;
-        }}
-        summary {{
-            cursor: pointer;
-            padding: 5px;
-            border-radius: 3px;
-        }}
-        summary:hover {{
-            background-color: #333;
-        }}
-        p {{
-            margin: 5px 0 5px 20px;
-            padding: 5px;
-        }}
-    </style>
-</head>
-<body>
-"#,
-            root_title
-        );
-
-        // Generate the HTML tree
-        html.push_str(&export_html_node(&app.tree, root_id, true));
-
-        html.push_str("</body>\n</html>\n");
-
-        // Write to file
-        std::fs::write(&filename, html)?;
-
-        app.set_message(format!("Exported to {}", filename));
-    }
-
-    Ok(())
-}
-
-fn export_html_node(tree: &Arena<Node>, node_id: NodeId, is_root: bool) -> String {
-    let node = tree.get(node_id).unwrap().get();
-    let mut output = String::new();
-
-    // Get visible children (not collapsed)
-    let visible_children: Vec<NodeId> = if !node.is_collapsed {
-        node_id.children(tree).collect()
-    } else {
-        vec![]
-    };
-
-    if is_root {
-        // Root node
-        output.push_str(&format!("<div id=\"root\">{}</div>\n", node.title));
-        for child_id in visible_children {
-            output.push_str(&export_html_node(tree, child_id, false));
-        }
-    } else if visible_children.is_empty() {
-        // Leaf node or collapsed node
-        output.push_str(&format!("<p>{}</p>\n", node.title));
-    } else {
-        // Node with children
-        output.push_str("<details>\n");
-        output.push_str(&format!("<summary>{}</summary>\n", node.title));
-        for child_id in visible_children {
-            output.push_str(&export_html_node(tree, child_id, false));
-        }
-        output.push_str("</details>\n");
-    }
-
-    output
 }
 
 fn export_text(app: &mut AppState) -> Result<()> {
@@ -1868,34 +1759,6 @@ mod tests {
 
         // Should not contain grandchild of collapsed Child 2
         assert!(!exported.contains("Grandchild"));
-    }
-
-    #[test]
-    fn test_export_html() {
-        use std::fs;
-        use tempfile::TempDir;
-
-        let mut app = create_test_app();
-
-        // Set a filename so export can work
-        let temp_dir = TempDir::new().unwrap();
-        let test_file = temp_dir.path().join("test.hmm");
-        app.filename = Some(test_file.clone());
-
-        export_html(&mut app).unwrap();
-
-        // Check HTML file was created
-        let html_file = temp_dir.path().join("test.hmm.html");
-        assert!(html_file.exists());
-
-        // Read and validate HTML content
-        let html_content = fs::read_to_string(html_file).unwrap();
-        assert!(html_content.contains("<!DOCTYPE html>"));
-        assert!(html_content.contains("<title>Root</title>"));
-        assert!(html_content.contains("<div id=\"root\">Root</div>"));
-        assert!(html_content.contains("Child 1")); // Child 1 is a leaf, so it's a <p> not <summary>
-        assert!(html_content.contains("<summary>Child 2</summary>")); // Child 2 has children
-        assert!(html_content.contains("<p>Grandchild</p>"));
     }
 
     #[test]
