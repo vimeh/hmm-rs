@@ -3,8 +3,6 @@ use crate::model::NodeId;
 use std::collections::HashMap;
 use unicode_width::UnicodeWidthStr;
 
-const CONN_LEFT_LEN: usize = 6;
-const CONN_RIGHT_LEN: usize = 4;
 const WIDTH_TOLERANCE: f32 = 1.3;
 const LEFT_PADDING: usize = 1;
 
@@ -77,7 +75,7 @@ impl LayoutEngine {
                     .get(&node_id.ancestors(&app.tree).nth(1).unwrap())
                     .map(|p| p.w)
                     .unwrap_or(0.0)
-                + (CONN_LEFT_LEN + CONN_RIGHT_LEN + 1) as f64
+                + 10.0  // Space for connection lines (matching PHP conn_left_len + conn_right_len)
         };
 
         // Determine if this is a leaf or collapsed node

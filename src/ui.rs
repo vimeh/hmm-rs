@@ -111,9 +111,6 @@ fn draw_node_connections(
         let num_visible_children = visible_children.len();
         let has_hidden_children = num_visible_children != num_children;
 
-        // Constants from PHP version
-        const CONN_LEFT_LEN: usize = 6;
-        const CONN_RIGHT_LEN: usize = 4;
 
         // Calculate node middle Y position
         let node_middle_y =
@@ -156,14 +153,8 @@ fn draw_node_connections(
                     (child_layout.y + child_layout.yo + child_layout.lh / 2.0 - 0.6).round() as i32;
 
                 // Calculate x position based on alignment setting
-                let x = if app.config.align_levels {
-                    (node_layout.x + node_layout.w - 2.0 - app.viewport_left) as i32
-                } else {
-                    (child_layout.x
-                        - CONN_LEFT_LEN as f64
-                        - CONN_RIGHT_LEN as f64
-                        - app.viewport_left) as i32
-                };
+                // Add 1 space after node text before connection line
+                let x = (node_layout.x + node_layout.w + 1.0 - app.viewport_left) as i32;
 
                 // Build the horizontal line
                 let line_prefix = if has_hidden_children {
@@ -172,9 +163,9 @@ fn draw_node_connections(
                     "──"
                 };
                 let line_len = if app.config.align_levels {
-                    (child_layout.x - node_layout.x - node_layout.w - 1.0).max(0.0) as usize
+                    (child_layout.x - node_layout.x - node_layout.w - 3.0).max(0.0) as usize
                 } else {
-                    CONN_LEFT_LEN + CONN_RIGHT_LEN - 3
+                    6  // Fill the standard spacing with lines (10 - 2 for prefix - 1 for space - 1 for junction)
                 };
 
                 // Draw horizontal line
@@ -204,7 +195,7 @@ fn draw_node_connections(
 
                 // If child is at different Y level, draw vertical connection
                 if (y1 - y2).abs() > 0 {
-                    let vert_x = (child_layout.x - 2.0 - app.viewport_left) as i32;
+                    let vert_x = (child_layout.x - 1.0 - app.viewport_left) as i32;
 
                     // Draw vertical line
                     for y in y1.min(y2)..y1.max(y2) {
@@ -276,14 +267,8 @@ fn draw_node_connections(
                 let middle = node_middle_y;
 
                 // Calculate x position based on alignment
-                let x = if app.config.align_levels {
-                    (node_layout.x + node_layout.w - 2.0 - app.viewport_left) as i32
-                } else {
-                    (top_child_layout.x
-                        - CONN_LEFT_LEN as f64
-                        - CONN_RIGHT_LEN as f64
-                        - app.viewport_left) as i32
-                };
+                // Add 1 space after node text before connection line
+                let x = (node_layout.x + node_layout.w + 1.0 - app.viewport_left) as i32;
 
                 // Draw horizontal line from parent
                 let line_prefix = if has_hidden_children {
@@ -292,9 +277,9 @@ fn draw_node_connections(
                     "──"
                 };
                 let line_len = if app.config.align_levels {
-                    (top_child_layout.x - node_layout.x - node_layout.w - 3.0).max(0.0) as usize
+                    (top_child_layout.x - node_layout.x - node_layout.w - 4.0).max(0.0) as usize
                 } else {
-                    CONN_LEFT_LEN - 2
+                    0  // No extra line for junction character
                 };
 
                 let py = middle - app.viewport_top as i32;
@@ -309,8 +294,7 @@ fn draw_node_connections(
                 }
 
                 // Vertical line position
-                let vert_x =
-                    (top_child_layout.x - CONN_RIGHT_LEN as f64 - app.viewport_left) as i32;
+                let vert_x = (top_child_layout.x - 1.0 - app.viewport_left) as i32;
 
                 // Draw vertical line spanning all children
                 for y in top_y..bottom_y {
