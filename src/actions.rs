@@ -93,16 +93,6 @@ pub enum Action {
     ToggleHide,
     ToggleShowHidden,
 
-    // Rank operations
-    IncreasePositiveRank,
-    DecreasePositiveRank,
-    IncreaseNegativeRank,
-    DecreaseNegativeRank,
-
-    // Star rating
-    AddStar,
-    RemoveStar,
-
     // Layout
     IncreaseTextWidth,
     DecreaseTextWidth,
@@ -213,14 +203,6 @@ pub fn execute_action(action: Action, app: &mut AppState) -> Result<()> {
         Action::IncreaseLineSpacing => increase_line_spacing(app),
         Action::DecreaseLineSpacing => decrease_line_spacing(app),
 
-        // Rank operations
-        Action::IncreasePositiveRank => increase_positive_rank(app),
-        Action::DecreasePositiveRank => decrease_positive_rank(app),
-        Action::IncreaseNegativeRank => increase_negative_rank(app),
-        Action::DecreaseNegativeRank => decrease_negative_rank(app),
-        // Star rating
-        Action::AddStar => add_star(app),
-        Action::RemoveStar => remove_star(app),
         // Help
         Action::ShowHelp => show_help(app),
         Action::CloseHelp => close_help(app),
@@ -1297,92 +1279,6 @@ fn decrease_line_spacing(app: &mut AppState) {
     app.set_message(format!("Line spacing: {}", app.config.line_spacing));
 }
 
-// Rank operations
-fn increase_positive_rank(app: &mut AppState) {
-    modify_rank(app, 1, 0);
-}
-
-fn decrease_positive_rank(app: &mut AppState) {
-    modify_rank(app, -1, 0);
-}
-
-fn increase_negative_rank(app: &mut AppState) {
-    modify_rank(app, 0, 1);
-}
-
-fn decrease_negative_rank(app: &mut AppState) {
-    modify_rank(app, 0, -1);
-}
-
-fn modify_rank(app: &mut AppState, positive_change: i32, negative_change: i32) {
-    if let Some(active_id) = app.active_node_id {
-        app.push_history();
-
-        let node = app.tree.get_mut(active_id).unwrap().get_mut();
-
-        // Parse existing rank from title
-        let mut positive = 0;
-        let mut negative = 0;
-
-        // Check if title starts with rank pattern (X+,Y-)
-        if let Some(captures) = regex::Regex::new(r"^\((\d+)\+,(\d+)\-\) ")
-            .unwrap()
-            .captures(&node.title)
-        {
-            positive = captures[1].parse::<i32>().unwrap_or(0);
-            negative = captures[2].parse::<i32>().unwrap_or(0);
-            // Remove the existing rank from title
-            node.title = regex::Regex::new(r"^\(\d+\+,\d+\-\) ")
-                .unwrap()
-                .replace(&node.title, "")
-                .to_string();
-        }
-
-        // Apply changes
-        positive = (positive + positive_change).max(0);
-        negative = (negative + negative_change).max(0);
-
-        // Add the new rank to the beginning of the title
-        if positive > 0 || negative > 0 {
-            node.title = format!("({}+,{}-) {}", positive, negative, node.title);
-        }
-
-        app.set_message(format!("Rank: {}+, {}-", positive, negative));
-    }
-}
-
-// Star rating operations
-fn add_star(app: &mut AppState) {
-    modify_stars(app, 1);
-}
-
-fn remove_star(app: &mut AppState) {
-    modify_stars(app, -1);
-}
-
-fn modify_stars(app: &mut AppState, change: i32) {
-    if let Some(active_id) = app.active_node_id {
-        app.push_history();
-
-        let node = app.tree.get_mut(active_id).unwrap().get_mut();
-
-        // Count existing stars
-        let current_stars = node.title.matches('★').count() as i32;
-        let new_stars = (current_stars + change).clamp(0, 5) as usize;
-
-        // Remove existing stars and empty stars
-        node.title = node.title.replace(['★', '☆'], "").trim().to_string();
-
-        // Add new stars at the end
-        if new_stars > 0 {
-            let stars_string = format!(" {}{}", "★".repeat(new_stars), "☆".repeat(5 - new_stars));
-            node.title.push_str(&stars_string);
-        }
-
-        app.set_message(format!("{} stars", new_stars));
-    }
-}
-
 // Help functions
 fn show_help(app: &mut AppState) {
     app.mode = AppMode::Help;
@@ -2069,68 +1965,6 @@ mod tests {
         }
         assert!(found_sibling1);
         assert!(found_sibling2);
-    }
-
-    #[test]
-    fn test_rank_operations() {
-        let mut app = create_test_app();
-        let root = app.root_id.unwrap();
-        app.active_node_id = Some(root);
-
-        // Test increasing positive rank
-        increase_positive_rank(&mut app);
-        let node = app.tree.get(root).unwrap().get();
-        assert!(node.title.starts_with("(1+,0-) "));
-
-        // Test increasing negative rank
-        increase_negative_rank(&mut app);
-        let node = app.tree.get(root).unwrap().get();
-        assert!(node.title.starts_with("(1+,1-) "));
-
-        // Test decreasing positive rank
-        decrease_positive_rank(&mut app);
-        let node = app.tree.get(root).unwrap().get();
-        assert!(node.title.starts_with("(0+,1-) "));
-
-        // Test that rank is removed when both are 0
-        decrease_negative_rank(&mut app);
-        let node = app.tree.get(root).unwrap().get();
-        assert!(!node.title.contains('+'));
-        assert!(!node.title.contains('-'));
-    }
-
-    #[test]
-    fn test_star_operations() {
-        let mut app = create_test_app();
-        let root = app.root_id.unwrap();
-        app.active_node_id = Some(root);
-
-        // Test adding stars
-        add_star(&mut app);
-        let node = app.tree.get(root).unwrap().get();
-        assert!(node.title.contains('★'));
-        assert!(node.title.contains("☆☆☆☆"));
-
-        // Add more stars
-        add_star(&mut app);
-        add_star(&mut app);
-        let node = app.tree.get(root).unwrap().get();
-        assert!(node.title.contains("★★★"));
-        assert!(node.title.contains("☆☆"));
-
-        // Test max stars
-        add_star(&mut app);
-        add_star(&mut app);
-        add_star(&mut app); // Should cap at 5
-        let node = app.tree.get(root).unwrap().get();
-        assert!(node.title.contains("★★★★★"));
-        assert!(!node.title.contains('☆'));
-
-        // Test removing stars
-        remove_star(&mut app);
-        let node = app.tree.get(root).unwrap().get();
-        assert!(node.title.contains("★★★★"));
-        assert!(node.title.contains('☆'));
     }
 
     #[test]
