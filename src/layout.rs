@@ -5,6 +5,8 @@ use unicode_width::UnicodeWidthStr;
 
 const WIDTH_TOLERANCE: f32 = 1.3;
 const LEFT_PADDING: usize = 1;
+/// Space allocated for connection lines between parent and child nodes
+pub const NODE_CONNECTION_SPACING: f64 = 6.0;
 
 #[derive(Debug, Clone)]
 pub struct LayoutNode {
@@ -75,7 +77,7 @@ impl LayoutEngine {
                     .get(&node_id.ancestors(&app.tree).nth(1).unwrap())
                     .map(|p| p.w)
                     .unwrap_or(0.0)
-                + 6.0 // Space for connection lines
+                + NODE_CONNECTION_SPACING
         };
 
         // Determine if this is a leaf or collapsed node
@@ -396,6 +398,84 @@ mod tests {
         // So we check that the layout was calculated (has nodes) but the hidden node might not be included
         assert!(!layout.nodes.is_empty());
         assert!(layout.nodes.contains_key(&app.root_id.unwrap()));
+    }
+
+    #[test]
+    fn test_node_spacing_consistency() {
+        let app = create_test_app();
+        let layout = LayoutEngine::calculate_layout(&app);
+
+        // Get root and its first child
+        let root_id = app.root_id.unwrap();
+        let child1_id = root_id.children(&app.tree).next().unwrap();
+
+        let root_layout = layout.nodes.get(&root_id).unwrap();
+        let child_layout = layout.nodes.get(&child1_id).unwrap();
+
+        // Child should be positioned at parent_x + parent_width + NODE_CONNECTION_SPACING
+        let expected_child_x = root_layout.x + root_layout.w + NODE_CONNECTION_SPACING;
+        assert_eq!(
+            child_layout.x, expected_child_x,
+            "Child node should be positioned with {} units spacing from parent",
+            NODE_CONNECTION_SPACING
+        );
+    }
+
+    #[test]
+    fn test_multiple_children_spacing() {
+        let app = create_test_app();
+        let layout = LayoutEngine::calculate_layout(&app);
+
+        // Get root's children
+        let root_id = app.root_id.unwrap();
+        let children: Vec<_> = root_id.children(&app.tree).collect();
+        assert!(children.len() >= 2, "Test requires at least 2 children");
+
+        let child1_layout = layout.nodes.get(&children[0]).unwrap();
+        let child2_layout = layout.nodes.get(&children[1]).unwrap();
+
+        // Both children should have the same x position
+        assert_eq!(
+            child1_layout.x, child2_layout.x,
+            "Sibling nodes should be aligned at the same x position"
+        );
+    }
+
+    #[test]
+    fn test_deep_tree_spacing() {
+        let config = AppConfig::default();
+        let mut app = AppState::new(config);
+
+        // Create a linear chain
+        let root = app.tree.new_node(Node::new("Root".to_string()));
+        let child = app.tree.new_node(Node::new("Child".to_string()));
+        let grandchild = app.tree.new_node(Node::new("Grandchild".to_string()));
+
+        root.append(child, &mut app.tree);
+        child.append(grandchild, &mut app.tree);
+
+        app.root_id = Some(root);
+
+        let layout = LayoutEngine::calculate_layout(&app);
+
+        let root_layout = layout.nodes.get(&root).unwrap();
+        let child_layout = layout.nodes.get(&child).unwrap();
+        let grandchild_layout = layout.nodes.get(&grandchild).unwrap();
+
+        // Check consistent spacing at each level
+        let spacing1 = child_layout.x - (root_layout.x + root_layout.w);
+        let spacing2 = grandchild_layout.x - (child_layout.x + child_layout.w);
+
+        assert_eq!(
+            spacing1, NODE_CONNECTION_SPACING,
+            "Spacing between root and child should be {} units",
+            NODE_CONNECTION_SPACING
+        );
+        assert_eq!(
+            spacing2, NODE_CONNECTION_SPACING,
+            "Spacing between child and grandchild should be {} units",
+            NODE_CONNECTION_SPACING
+        );
     }
 
     #[test]

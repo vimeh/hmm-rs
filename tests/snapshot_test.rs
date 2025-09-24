@@ -292,6 +292,102 @@ fn test_render_very_deep_tree() {
 }
 
 #[test]
+fn test_no_extra_spaces_in_connections() {
+    // This is a regression test for the spacing issue
+    let config = AppConfig::default();
+    let mut app = AppState::new(config);
+
+    // Create a simple linear tree
+    let root = app.tree.new_node(Node::new("Root".to_string()));
+    let child1 = app.tree.new_node(Node::new("Child1".to_string()));
+    let child2 = app.tree.new_node(Node::new("Child2".to_string()));
+
+    root.append(child1, &mut app.tree);
+    child1.append(child2, &mut app.tree);
+
+    app.root_id = Some(root);
+    app.active_node_id = Some(root);
+
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
+
+    // Get the rendered output as a string
+    let output = terminal.backend().to_string();
+    let lines: Vec<&str> = output.lines().collect();
+
+    // Find the line with our nodes
+    let node_line = lines
+        .iter()
+        .find(|line| line.contains("Root") && line.contains("Child1"))
+        .expect("Should find line with Root and Child1");
+
+    // Check for the problematic pattern: "──    ───" (2 dashes, spaces, 3 dashes)
+    assert!(
+        !node_line.contains("──    "),
+        "Connection should not have spaces between dash groups"
+    );
+    assert!(
+        !node_line.contains("──   "),
+        "Connection should not have multiple spaces"
+    );
+
+    // Verify the correct pattern exists: 5 continuous dashes
+    assert!(
+        node_line.contains("─────"),
+        "Connection should have 5 continuous dashes"
+    );
+}
+
+#[test]
+fn test_connection_dash_count() {
+    // Test that verifies exact dash count in connections
+    let config = AppConfig::default();
+    let mut app = AppState::new(config);
+
+    // Create tree with multiple children to test both connection types
+    let root = app.tree.new_node(Node::new("R".to_string()));
+    let child1 = app.tree.new_node(Node::new("C1".to_string()));
+    let child2 = app.tree.new_node(Node::new("C2".to_string()));
+
+    root.append(child1, &mut app.tree);
+    root.append(child2, &mut app.tree);
+
+    app.root_id = Some(root);
+
+    let backend = TestBackend::new(40, 10);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
+
+    let output = terminal.backend().to_string();
+
+    // Count dashes between R and the vertical line
+    let lines: Vec<&str> = output.lines().collect();
+
+    // Find line with root
+    let root_line = lines
+        .iter()
+        .find(|line| line.contains(" R "))
+        .expect("Should find root line");
+
+    // Extract the connection part after "R "
+    if let Some(r_pos) = root_line.find(" R ") {
+        let after_r = &root_line[r_pos + 3..];
+        // Count continuous dashes
+        let dash_count = after_r.chars().take_while(|&c| c == '─').count();
+
+        // For multiple children, we expect 4 dashes
+        assert!(
+            dash_count == 4 || dash_count == 0, // 0 if connection is on different line
+            "Multiple children connection should have 4 dashes, found {}",
+            dash_count
+        );
+    }
+}
+
+#[test]
 fn test_render_with_viewport_offset() {
     let mut app = create_test_app_with_tree();
 

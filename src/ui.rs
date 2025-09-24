@@ -9,6 +9,15 @@ use ratatui::{
     Frame,
 };
 
+/// Connection line for single child (5 dashes total)
+const SINGLE_CHILD_CONNECTION: &str = "─────";
+/// Connection line for single child with hidden siblings
+const SINGLE_CHILD_CONNECTION_HIDDEN: &str = "─╫───";
+/// Connection line for multiple children (4 dashes total, leaving room for junction)
+const MULTI_CHILD_CONNECTION: &str = "────";
+/// Connection line for multiple children with hidden siblings
+const MULTI_CHILD_CONNECTION_HIDDEN: &str = "─╫──";
+
 pub fn render(frame: &mut Frame, app: &mut AppState) {
     // Update terminal size
     let size = frame.area();
@@ -157,9 +166,9 @@ fn draw_node_connections(
 
                 // Build the horizontal line - total of 5 dashes
                 let line_to_draw = if has_hidden_children {
-                    "─╫───"
+                    SINGLE_CHILD_CONNECTION_HIDDEN
                 } else {
-                    "─────"
+                    SINGLE_CHILD_CONNECTION
                 };
 
                 // Draw horizontal line
@@ -255,9 +264,9 @@ fn draw_node_connections(
 
                 // Draw horizontal line from parent - total of 4 dashes (leaves room for junction)
                 let line_to_draw = if has_hidden_children {
-                    "─╫──"
+                    MULTI_CHILD_CONNECTION_HIDDEN
                 } else {
-                    "────"
+                    MULTI_CHILD_CONNECTION
                 };
 
                 let py = middle - app.viewport_top as i32;
@@ -611,4 +620,119 @@ fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
     }
 
     lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_connection_line_constants() {
+        // Verify single child connection is 5 dashes
+        assert_eq!(
+            SINGLE_CHILD_CONNECTION.chars().filter(|&c| c == '─').count(),
+            5,
+            "Single child connection should have exactly 5 dashes"
+        );
+
+        // Verify multi-child connection is 4 dashes
+        assert_eq!(
+            MULTI_CHILD_CONNECTION.chars().filter(|&c| c == '─').count(),
+            4,
+            "Multi-child connection should have exactly 4 dashes"
+        );
+
+        // Verify hidden variants have the same dash count
+        let single_hidden_dashes = SINGLE_CHILD_CONNECTION_HIDDEN
+            .chars()
+            .filter(|&c| c == '─')
+            .count();
+        assert_eq!(
+            single_hidden_dashes, 4,
+            "Single child connection with hidden should have 4 dashes plus ╫"
+        );
+
+        let multi_hidden_dashes = MULTI_CHILD_CONNECTION_HIDDEN
+            .chars()
+            .filter(|&c| c == '─')
+            .count();
+        assert_eq!(
+            multi_hidden_dashes, 3,
+            "Multi-child connection with hidden should have 3 dashes plus ╫"
+        );
+    }
+
+    #[test]
+    fn test_no_spaces_in_connection_lines() {
+        // Ensure no spaces in connection strings
+        assert!(
+            !SINGLE_CHILD_CONNECTION.contains(' '),
+            "Single child connection should not contain spaces"
+        );
+        assert!(
+            !MULTI_CHILD_CONNECTION.contains(' '),
+            "Multi-child connection should not contain spaces"
+        );
+        assert!(
+            !SINGLE_CHILD_CONNECTION_HIDDEN.contains(' '),
+            "Single child connection with hidden should not contain spaces"
+        );
+        assert!(
+            !MULTI_CHILD_CONNECTION_HIDDEN.contains(' '),
+            "Multi-child connection with hidden should not contain spaces"
+        );
+    }
+
+    #[test]
+    fn test_draw_text_helper() {
+        let mut buffer = vec![vec![' '; 20]; 5];
+
+        draw_text(&mut buffer, 5, 2, "─────");
+
+        // Check that 5 dashes were drawn starting at position 5
+        for i in 0..5 {
+            assert_eq!(
+                buffer[2][5 + i], '─',
+                "Dash should be at position {}", 5 + i
+            );
+        }
+
+        // Check no extra characters
+        assert_eq!(buffer[2][4], ' ', "Character before should be space");
+        assert_eq!(buffer[2][10], ' ', "Character after should be space");
+    }
+
+    #[test]
+    fn test_set_char_bounds() {
+        let mut buffer = vec![vec![' '; 10]; 5];
+
+        // Test within bounds
+        set_char(&mut buffer, 5, 2, 'X');
+        assert_eq!(buffer[2][5], 'X');
+
+        // Test out of bounds - should not panic
+        set_char(&mut buffer, 15, 2, 'Y'); // x out of bounds
+        set_char(&mut buffer, 5, 10, 'Z'); // y out of bounds
+
+        // Original buffer should be unchanged except for the valid set
+        assert_eq!(buffer[2][5], 'X');
+    }
+
+    #[test]
+    fn test_connection_total_length() {
+        use crate::layout::NODE_CONNECTION_SPACING;
+
+        // Total spacing is 6 units
+        // With 1 space before connection, we need 5 dashes
+        let expected_connection_chars = NODE_CONNECTION_SPACING as usize - 1;
+
+        // Count characters, not bytes
+        let actual_chars = SINGLE_CHILD_CONNECTION.chars().count();
+
+        assert_eq!(
+            actual_chars, expected_connection_chars,
+            "Single child connection should have {} characters to fill spacing",
+            expected_connection_chars
+        );
+    }
 }
