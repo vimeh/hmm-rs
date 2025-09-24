@@ -1,0 +1,37 @@
+Task Management
+	Priority High 🔴
+		✓ Completed Task 1
+		✓ Completed Task 2
+		✗ Failed Task
+		→ In Progress Task
+	Priority Medium 🟡
+		⚠️ Warning: Check Dependencies
+		📝 Document Requirements
+		🔍 Review Code
+		🚀 Deploy to Staging
+	Priority Low 🟢
+		💡 New Idea
+		📚 Research Topic
+		🔧 Fix Minor Bug
+		📊 Generate Report
+	Status Indicators
+		[ ] Pending
+		[x] Done
+		[~] Partially Complete
+		[!] Urgent
+		[?] Needs Clarification
+	Math Symbols
+		∑ Sum Total
+		∏ Product
+		∞ Infinite Loop
+		∀ For All Cases
+		∃ There Exists
+		∈ Element Of Set
+	Arrows & Navigation
+		↑ Up Direction
+		↓ Down Direction
+		← Left Direction
+		→ Right Direction
+		↔ Bidirectional
+		⇒ Implies
+		⇔ If and Only If

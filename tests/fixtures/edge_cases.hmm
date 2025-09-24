@@ -1,0 +1,34 @@
+Edge Case Tests
+
+	Empty Title Above
+	Very Long Title That Goes On And On And On And Should Test The Text Wrapping Functionality Of The Application When Displaying Nodes With Extremely Long Titles That Exceed Normal Boundaries
+		Normal Child
+
+			Another Empty
+	Single Character
+		A
+		B
+		C
+	Only Spaces
+
+
+	Mixed Indentation
+		Tab Indented
+  Space Indented
+			Mixed Tab and Space
+	Special Line Breaks
+		Line with trailing spaces
+		Line with	internal	tabs
+	Numbers Only
+		123
+		456
+			789
+				0
+	Leading/Trailing Whitespace
+		 Leading Space
+		Trailing Space
+		 Both Sides
+	Nested Empty Parents
+
+
+				Has Content

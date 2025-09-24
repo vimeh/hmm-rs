@@ -1,0 +1,31 @@
+Documentation Project
+	# Main Heading
+		## Subheading 1
+			### Sub-subheading
+		## Subheading 2
+	**Bold Text**
+		*Italic Text*
+		***Bold and Italic***
+		~~Strikethrough~~
+	Code Examples
+		`inline code`
+		```python code block```
+		```javascript
+			function example() {}
+		```
+	Lists & Formatting
+		- Bullet Point 1
+		- Bullet Point 2
+		* Asterisk Point
+		+ Plus Point
+		1. Numbered Item
+		2. Another Number
+	Links & References
+		[Link Text](https://example.com)
+		![Image Alt](image.png)
+		> Blockquote text
+		--- Horizontal Rule
+	Tables (as text)
+		| Column 1 | Column 2 |
+		|----------|----------|
+		| Data 1   | Data 2   |

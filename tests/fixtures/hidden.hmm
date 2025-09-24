@@ -1,0 +1,22 @@
+Visibility Test
+	Public Section
+		Visible Node 1
+		Visible Node 2
+		[HIDDEN] Secret Node
+			[HIDDEN] Secret Child 1
+			[HIDDEN] Secret Child 2
+		Visible Node 3
+	[HIDDEN] Private Section
+		[HIDDEN] Private Node 1
+		[HIDDEN] Private Node 2
+		Regular Node Under Hidden
+	Mixed Visibility
+		Public Parent
+			[HIDDEN] Hidden Child
+				Nested Under Hidden
+			Public Child
+				[HIDDEN] Hidden Grandchild
+	[HIDDEN] Configuration
+		[HIDDEN] API Keys
+		[HIDDEN] Passwords
+		[HIDDEN] Secret Tokens

@@ -1,6 +1,14 @@
 use hmm_rs::{parser, AppConfig, AppState, Node, NodeId};
 use std::fs;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
+
+mod common;
+
+/// Helper function to get fixture path
+fn fixture_path(name: &str) -> PathBuf {
+    Path::new("tests/fixtures").join(name)
+}
 
 #[test]
 fn test_load_and_save_file() {
@@ -290,4 +298,62 @@ fn test_paste_operations() {
 
     // Verify clipboard is ready for paste operations
     assert!(app.clipboard.is_some());
+}
+
+#[test]
+fn test_load_fixture_into_app_state() {
+    let config = AppConfig::default();
+    let mut app = AppState::new(config);
+
+    // Load complex fixture
+    let path = fixture_path("complex.hmm");
+    let (tree, root_id) = parser::load_file(&path).unwrap();
+
+    app.tree = tree;
+    app.root_id = Some(root_id);
+    app.active_node_id = Some(root_id);
+    app.filename = Some(path);
+
+    // Test navigation and operations
+    assert!(app.root_id.is_some());
+    assert_eq!(
+        app.tree.get(root_id).unwrap().get().title,
+        "Project Management System"
+    );
+
+    // Test that we can navigate the tree
+    let children: Vec<_> = root_id.children(&app.tree).collect();
+    assert_eq!(children.len(), 4); // Four main phases
+
+    // Push to history
+    app.push_history();
+    assert!(!app.history.is_empty());
+}
+
+#[test]
+fn test_fixture_round_trips() {
+    // Test that loading and saving preserves structure
+    let fixtures = ["simple.hmm", "unicode.hmm", "symbols.hmm"];
+
+    for fixture in fixtures {
+        let original_path = fixture_path(fixture);
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path().join(fixture);
+
+        // Load original
+        let (tree, root) = parser::load_file(&original_path).unwrap();
+
+        // Save to temp
+        parser::save_file(&tree, root, &temp_path).unwrap();
+
+        // Load from temp
+        let (tree2, root2) = parser::load_file(&temp_path).unwrap();
+
+        // Compare using utility function
+        assert!(
+            common::trees_are_equal(&tree, root, &tree2, root2),
+            "Trees not equal for fixture: {}",
+            fixture
+        );
+    }
 }
