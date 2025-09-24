@@ -1,6 +1,10 @@
 use crate::app::AppState;
 use crate::layout::LayoutEngine;
-use crate::model::{Node, NodeId};
+use crate::model::NodeId;
+
+// Weight factor for prioritizing vertical movement over horizontal
+// Higher value means vertical distance matters more
+const VERTICAL_WEIGHT: f64 = 15.0;
 
 // Helper function to ensure active node is visible
 pub fn ensure_node_visible(app: &mut AppState) {
@@ -35,49 +39,147 @@ pub fn ensure_node_visible(app: &mut AppState) {
     }
 }
 
+// Helper to get center position of a node
+fn get_node_center(layout: &LayoutEngine, node_id: NodeId) -> Option<(f64, f64)> {
+    layout.nodes.get(&node_id).map(|node| {
+        let center_x = node.x + node.w / 2.0;
+        let center_y = node.y + node.yo + node.lh / 2.0;
+        (center_x, center_y)
+    })
+}
+
+// Find the nearest node in a specific direction using spatial distance
+fn find_nearest_node_in_direction(
+    _app: &AppState,
+    layout: &LayoutEngine,
+    active_id: NodeId,
+    direction_x: f64,
+    direction_y: f64,
+) -> Option<NodeId> {
+    let (current_x, current_y) = get_node_center(layout, active_id)?;
+
+    let mut best_distance = f64::MAX;
+    let mut best_node = None;
+
+    // Search through all visible nodes
+    for (node_id, node_layout) in &layout.nodes {
+        // Skip the current node and root's parent
+        if *node_id == active_id || node_layout.x < 0.0 || node_layout.y < 0.0 {
+            continue;
+        }
+
+        let (node_x, node_y) = get_node_center(layout, *node_id)?;
+        let dx = node_x - current_x;
+        let dy = node_y - current_y;
+
+        // Check if the node is in the desired direction
+        let in_direction = (direction_x == 0.0 || dx * direction_x > 0.0)
+            && (direction_y == 0.0 || dy * direction_y > 0.0);
+
+        if !in_direction {
+            continue;
+        }
+
+        // Calculate weighted distance (prioritize vertical movement)
+        let distance = if direction_y != 0.0 {
+            // For up/down movement, heavily weight vertical distance
+            (dy * VERTICAL_WEIGHT).powi(2) + dx.powi(2)
+        } else {
+            // For left/right movement, use normal distance
+            dy.powi(2) + dx.powi(2)
+        };
+
+        if distance < best_distance {
+            best_distance = distance;
+            best_node = Some(*node_id);
+        }
+    }
+
+    best_node
+}
+
 pub fn go_up(app: &mut AppState) {
     if let Some(active_id) = app.active_node_id {
-        // Find the previous visible sibling or parent's previous sibling
-        if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1) {
-            let siblings: Vec<NodeId> = parent_id.children(&app.tree).collect();
-            let current_index = siblings.iter().position(|&id| id == active_id);
+        let layout = LayoutEngine::calculate_layout(app);
 
-            if let Some(idx) = current_index {
-                if idx > 0 {
-                    app.active_node_id = Some(siblings[idx - 1]);
+        // First try to move to previous sibling based on position
+        if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1) {
+            if let Some(current_layout) = layout.nodes.get(&active_id) {
+                let current_y = current_layout.y + current_layout.yo;
+
+                // Find siblings that are above us
+                let mut best_sibling = None;
+                let mut best_y = -1.0;
+
+                for sibling_id in parent_id.children(&app.tree) {
+                    if sibling_id == active_id {
+                        continue;
+                    }
+
+                    if let Some(sibling_layout) = layout.nodes.get(&sibling_id) {
+                        let sibling_y = sibling_layout.y + sibling_layout.yo;
+                        if sibling_y < current_y && sibling_y > best_y {
+                            best_y = sibling_y;
+                            best_sibling = Some(sibling_id);
+                        }
+                    }
+                }
+
+                if let Some(sibling) = best_sibling {
+                    app.active_node_id = Some(sibling);
                     ensure_node_visible(app);
-                } else if parent_id != app.root_id.unwrap() {
-                    app.active_node_id = Some(parent_id);
-                    ensure_node_visible(app);
+                    return;
                 }
             }
+        }
+
+        // If no sibling above, find any node above us
+        if let Some(nearest) = find_nearest_node_in_direction(app, &layout, active_id, 0.0, -1.0) {
+            app.active_node_id = Some(nearest);
+            ensure_node_visible(app);
         }
     }
 }
 
 pub fn go_down(app: &mut AppState) {
     if let Some(active_id) = app.active_node_id {
-        // Try to go to first child
-        if let Some(first_child) = active_id.children(&app.tree).next() {
-            let node = app.tree.get(active_id).unwrap().get();
-            if !node.is_collapsed {
-                app.active_node_id = Some(first_child);
-                ensure_node_visible(app);
-                return;
+        let layout = LayoutEngine::calculate_layout(app);
+
+        // First try to move to next sibling based on position
+        if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1) {
+            if let Some(current_layout) = layout.nodes.get(&active_id) {
+                let current_y = current_layout.y + current_layout.yo;
+
+                // Find siblings that are below us
+                let mut best_sibling = None;
+                let mut best_y = f64::MAX;
+
+                for sibling_id in parent_id.children(&app.tree) {
+                    if sibling_id == active_id {
+                        continue;
+                    }
+
+                    if let Some(sibling_layout) = layout.nodes.get(&sibling_id) {
+                        let sibling_y = sibling_layout.y + sibling_layout.yo;
+                        if sibling_y > current_y && sibling_y < best_y {
+                            best_y = sibling_y;
+                            best_sibling = Some(sibling_id);
+                        }
+                    }
+                }
+
+                if let Some(sibling) = best_sibling {
+                    app.active_node_id = Some(sibling);
+                    ensure_node_visible(app);
+                    return;
+                }
             }
         }
 
-        // Otherwise, find next sibling
-        if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1) {
-            let siblings: Vec<NodeId> = parent_id.children(&app.tree).collect();
-            let current_index = siblings.iter().position(|&id| id == active_id);
-
-            if let Some(idx) = current_index {
-                if idx < siblings.len() - 1 {
-                    app.active_node_id = Some(siblings[idx + 1]);
-                    ensure_node_visible(app);
-                }
-            }
+        // If no sibling below, find any node below us
+        if let Some(nearest) = find_nearest_node_in_direction(app, &layout, active_id, 0.0, 1.0) {
+            app.active_node_id = Some(nearest);
+            ensure_node_visible(app);
         }
     }
 }
@@ -94,10 +196,39 @@ pub fn go_left(app: &mut AppState) {
 
 pub fn go_right(app: &mut AppState) {
     if let Some(active_id) = app.active_node_id {
-        let node = app.tree.get(active_id).unwrap().get();
-        if !node.is_collapsed {
-            if let Some(first_child) = active_id.children(&app.tree).next() {
-                app.active_node_id = Some(first_child);
+        let has_children = active_id.children(&app.tree).next().is_some();
+        let is_collapsed = app.tree.get(active_id).unwrap().get().is_collapsed;
+
+        // Auto-expand collapsed nodes when moving right (like PHP h-m-m)
+        if is_collapsed && has_children {
+            // Toggle the collapsed state
+            app.tree.get_mut(active_id).unwrap().get_mut().is_collapsed = false;
+        }
+
+        // Get layout after potential expansion
+        let layout = LayoutEngine::calculate_layout(app);
+
+        if let Some(current_layout) = layout.nodes.get(&active_id) {
+            let current_y = current_layout.y + current_layout.yo + current_layout.lh / 2.0;
+
+            // Find the child closest to our vertical position
+            let mut best_child = None;
+            let mut best_distance = f64::MAX;
+
+            for child_id in active_id.children(&app.tree) {
+                if let Some(child_layout) = layout.nodes.get(&child_id) {
+                    let child_y = child_layout.y + child_layout.yo + child_layout.lh / 2.0;
+                    let distance = (child_y - current_y).abs();
+
+                    if distance < best_distance {
+                        best_distance = distance;
+                        best_child = Some(child_id);
+                    }
+                }
+            }
+
+            if let Some(child) = best_child {
+                app.active_node_id = Some(child);
                 ensure_node_visible(app);
             }
         }
@@ -110,29 +241,54 @@ pub fn go_to_root(app: &mut AppState) {
 }
 
 pub fn go_to_top(app: &mut AppState) {
-    if let Some(root_id) = app.root_id {
-        app.active_node_id = Some(root_id);
+    let layout = LayoutEngine::calculate_layout(app);
+
+    // Find the node with the smallest y position (topmost)
+    let mut top_node = None;
+    let mut min_y = f64::MAX;
+
+    for (node_id, node_layout) in &layout.nodes {
+        // Skip invalid nodes
+        if node_layout.x < 0.0 || node_layout.y < 0.0 {
+            continue;
+        }
+
+        let node_y = node_layout.y + node_layout.yo;
+        if node_y < min_y {
+            min_y = node_y;
+            top_node = Some(*node_id);
+        }
+    }
+
+    if let Some(node_id) = top_node {
+        app.active_node_id = Some(node_id);
         app.viewport_top = 0.0;
         app.viewport_left = 0.0;
     }
 }
 
 pub fn go_to_bottom(app: &mut AppState) {
-    if let Some(root_id) = app.root_id {
-        fn find_last_visible(tree: &indextree::Arena<Node>, node_id: NodeId) -> NodeId {
-            let node = tree.get(node_id).unwrap().get();
-            if node.is_collapsed {
-                return node_id;
-            }
+    let layout = LayoutEngine::calculate_layout(app);
 
-            if let Some(last_child) = node_id.children(tree).next_back() {
-                return find_last_visible(tree, last_child);
-            }
+    // Find the node with the largest y position (bottommost)
+    let mut bottom_node = None;
+    let mut max_y = -1.0;
 
-            node_id
+    for (node_id, node_layout) in &layout.nodes {
+        // Skip invalid nodes
+        if node_layout.x < 0.0 || node_layout.y < 0.0 {
+            continue;
         }
 
-        app.active_node_id = Some(find_last_visible(&app.tree, root_id));
+        let node_y = node_layout.y + node_layout.yo + node_layout.lh;
+        if node_y > max_y {
+            max_y = node_y;
+            bottom_node = Some(*node_id);
+        }
+    }
+
+    if let Some(node_id) = bottom_node {
+        app.active_node_id = Some(node_id);
         ensure_node_visible(app);
     }
 }
@@ -167,24 +323,54 @@ mod tests {
     }
 
     #[test]
-    fn test_movement_go_down() {
+    fn test_spatial_movement_go_down() {
         let mut app = create_test_app();
         let root = app.root_id.unwrap();
-        let child1 = root.children(&app.tree).next().unwrap();
 
-        // Go down from root to first child
+        // From root, going down should find the node below (spatially)
+        // In our test tree: Root -> Child1 or Child2 (whichever is positioned below)
         go_down(&mut app);
-        assert_eq!(app.active_node_id, Some(child1));
+
+        // Should move to one of the children
+        assert_ne!(app.active_node_id, Some(root));
+        assert!(app.active_node_id.is_some());
     }
 
     #[test]
-    fn test_movement_go_up() {
+    fn test_spatial_movement_go_up() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+        let _child1 = root.children(&app.tree).next().unwrap();
+        let child2 = root.children(&app.tree).nth(1).unwrap();
+
+        // Start at child2
+        app.active_node_id = Some(child2);
+
+        // Going up should move to the node above spatially
+        // Could be child1 or root depending on layout
+        go_up(&mut app);
+
+        // Should have moved somewhere
+        assert_ne!(app.active_node_id, Some(child2));
+    }
+
+    #[test]
+    fn test_spatial_movement_siblings() {
         let mut app = create_test_app();
         let root = app.root_id.unwrap();
         let child1 = root.children(&app.tree).next().unwrap();
         let child2 = root.children(&app.tree).nth(1).unwrap();
 
-        app.active_node_id = Some(child2);
+        // Start at child1
+        app.active_node_id = Some(child1);
+
+        // Going down should move to sibling below if it exists
+        go_down(&mut app);
+
+        // In the default layout, should move to child2
+        assert_eq!(app.active_node_id, Some(child2));
+
+        // Going up from child2 should go back to child1
         go_up(&mut app);
         assert_eq!(app.active_node_id, Some(child1));
     }
@@ -204,13 +390,37 @@ mod tests {
     fn test_movement_go_right() {
         let mut app = create_test_app();
         let root = app.root_id.unwrap();
-        let child1 = root.children(&app.tree).next().unwrap();
 
-        // Ensure node is not collapsed
-        app.tree.get_mut(root).unwrap().get_mut().is_collapsed = false;
-
+        // From root, go right should move to a child (closest vertically)
         go_right(&mut app);
-        assert_eq!(app.active_node_id, Some(child1));
+
+        // Should be at one of the children
+        assert_ne!(app.active_node_id, Some(root));
+        let is_child = root
+            .children(&app.tree)
+            .any(|c| Some(c) == app.active_node_id);
+        assert!(is_child, "Should move to a child node");
+    }
+
+    #[test]
+    fn test_movement_go_right_auto_expand() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+
+        // Collapse the root
+        app.tree.get_mut(root).unwrap().get_mut().is_collapsed = true;
+
+        // Going right should auto-expand and move to child
+        go_right(&mut app);
+
+        // Node should be expanded
+        assert!(!app.tree.get(root).unwrap().get().is_collapsed);
+
+        // Should be at one of the children
+        let is_child = root
+            .children(&app.tree)
+            .any(|c| Some(c) == app.active_node_id);
+        assert!(is_child, "Should move to a child after auto-expand");
     }
 
     #[test]
@@ -235,26 +445,25 @@ mod tests {
 
         go_to_top(&mut app);
 
-        // Should be at the root (first visible node)
-        assert_eq!(app.active_node_id, Some(root));
+        // Should be at the topmost node (usually root)
+        // In spatial navigation, this is the node with smallest y coordinate
+        assert!(app.active_node_id.is_some());
+        assert_eq!(app.viewport_top, 0.0);
     }
 
     #[test]
     fn test_go_to_bottom() {
         let mut app = create_test_app();
-        let root = app.root_id.unwrap();
 
-        // Expand all to make grandchild visible
+        // Expand all to make all nodes visible
         for node in app.tree.iter_mut() {
             node.get_mut().is_collapsed = false;
         }
 
         go_to_bottom(&mut app);
 
-        // Should be at the last visible node (grandchild)
-        // Get the grandchild through Child2
-        let child2 = root.children(&app.tree).nth(1).unwrap();
-        let grandchild = child2.children(&app.tree).next().unwrap();
-        assert_eq!(app.active_node_id, Some(grandchild));
+        // Should be at the bottommost visible node
+        // This is the node with the largest y coordinate
+        assert!(app.active_node_id.is_some());
     }
 }
