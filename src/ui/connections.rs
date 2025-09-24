@@ -71,8 +71,11 @@ impl<'a> ConnectionRenderer<'a> {
         }
 
         // Recursively draw connections for visible children
-        for child_id in visible_children {
-            self.draw_node_connections(child_id);
+        // Only recurse if the node is not collapsed
+        if !node.is_collapsed {
+            for child_id in visible_children {
+                self.draw_node_connections(child_id);
+            }
         }
     }
 

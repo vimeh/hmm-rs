@@ -8,6 +8,11 @@ const VERTICAL_WEIGHT: f64 = 15.0;
 
 // Helper function to ensure active node is visible
 pub fn ensure_node_visible(app: &mut AppState) {
+    // Apply focus mode if focus lock is enabled
+    if app.config.focus_lock {
+        focus(app);
+    }
+
     if app.config.center_lock {
         center_active_node(app);
     } else if let Some(active_id) = app.active_node_id {
@@ -294,7 +299,7 @@ pub fn go_to_bottom(app: &mut AppState) {
 }
 
 // Import from view module to avoid circular dependency
-use super::view::center_active_node;
+use super::view::{center_active_node, focus};
 
 #[cfg(test)]
 mod tests {

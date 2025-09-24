@@ -84,8 +84,9 @@ pub fn center_active_node(app: &mut AppState) {
             let node_center_y = node_layout.y + node_layout.yo + node_layout.lh / 2.0;
 
             // Center the viewport on the active node
-            app.viewport_left = (node_center_x - app.terminal_width as f64 / 2.0).max(0.0);
-            app.viewport_top = (node_center_y - app.terminal_height as f64 / 2.0).max(0.0);
+            // Allow negative viewport values for proper centering of nodes near edges
+            app.viewport_left = node_center_x - app.terminal_width as f64 / 2.0;
+            app.viewport_top = node_center_y - app.terminal_height as f64 / 2.0;
         }
     }
 }
@@ -99,8 +100,18 @@ pub fn toggle_center_lock(app: &mut AppState) {
 }
 
 pub fn focus(app: &mut AppState) {
-    // TODO: Implement focus mode
-    app.set_message("Focus mode not yet implemented");
+    if let Some(active_id) = app.active_node_id {
+        // Focus mode: collapse all except ancestors and descendants of active node
+        // This matches the PHP implementation's focus_vh function
+
+        // Collapse siblings recursively up the tree
+        collapse_siblings_recursive(&mut app.tree, active_id);
+
+        // Expand all descendants of the active node
+        expand_descendants(&mut app.tree, active_id);
+
+        app.set_message("Focus mode applied");
+    }
 }
 
 pub fn toggle_focus_lock(app: &mut AppState) {
@@ -109,6 +120,45 @@ pub fn toggle_focus_lock(app: &mut AppState) {
         "Focus lock: {}",
         if app.config.focus_lock { "ON" } else { "OFF" }
     ));
+}
+
+/// Helper function to recursively collapse all siblings of a node up the tree
+fn collapse_siblings_recursive(tree: &mut Arena<Node>, node_id: NodeId) {
+    // Get the parent of the current node
+    let parent_id = match tree.get(node_id) {
+        Some(node_ref) => match node_ref.parent() {
+            Some(parent) => parent,
+            None => return, // Root node, no parent
+        },
+        None => return,
+    };
+
+    // Collapse all siblings (children of parent except current node)
+    let children: Vec<NodeId> = parent_id.children(tree).collect();
+    for child_id in children {
+        if child_id != node_id {
+            if let Some(child_node) = tree.get_mut(child_id) {
+                child_node.get_mut().is_collapsed = true;
+            }
+        }
+    }
+
+    // Recursively apply to parent
+    collapse_siblings_recursive(tree, parent_id);
+}
+
+/// Helper function to recursively expand all descendants of a node
+fn expand_descendants(tree: &mut Arena<Node>, node_id: NodeId) {
+    // Expand the current node
+    if let Some(node) = tree.get_mut(node_id) {
+        node.get_mut().is_collapsed = false;
+    }
+
+    // Recursively expand all children
+    let children: Vec<NodeId> = node_id.children(tree).collect();
+    for child_id in children {
+        expand_descendants(tree, child_id);
+    }
 }
 
 #[cfg(test)]
@@ -231,5 +281,149 @@ mod tests {
         let initial_focus_lock = app.config.focus_lock;
         toggle_focus_lock(&mut app);
         assert_ne!(app.config.focus_lock, initial_focus_lock);
+    }
+
+    #[test]
+    fn test_center_active_node() {
+        let mut app = create_test_app();
+
+        // Set terminal dimensions
+        app.terminal_width = 80;
+        app.terminal_height = 24;
+
+        // Test centering the root node
+        center_active_node(&mut app);
+
+        // The viewport should be adjusted to center the active node
+        // Since we don't know exact layout positions without running the layout engine,
+        // we just verify the function doesn't panic and modifies viewport
+        let initial_viewport_top = app.viewport_top;
+        let initial_viewport_left = app.viewport_left;
+
+        // Change active node and center again
+        let root = app.root_id.unwrap();
+        let child1 = root.children(&app.tree).next().unwrap();
+        app.active_node_id = Some(child1);
+        center_active_node(&mut app);
+
+        // Viewport should have changed (unless nodes are at exact same position)
+        // This is a basic test - more comprehensive tests would need mock layouts
+        assert!(
+            app.viewport_top != initial_viewport_top || app.viewport_left != initial_viewport_left
+        );
+    }
+
+    #[test]
+    fn test_center_active_node_allows_negative_viewport() {
+        let mut app = create_test_app();
+
+        // Set small terminal dimensions to force negative viewport
+        app.terminal_width = 10;
+        app.terminal_height = 10;
+
+        // Center on root node which is typically at (0,0) or small positive coordinates
+        center_active_node(&mut app);
+
+        // With small terminal and node near origin, viewport should be negative
+        // to center the node in the terminal
+        // This test verifies we don't clamp to 0
+        assert!(app.viewport_top < 0.0 || app.viewport_left < 0.0);
+    }
+
+    #[test]
+    fn test_focus_mode() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+
+        // Get the structure: Root -> Child1, Child2 -> Grandchild
+        let children: Vec<_> = root.children(&app.tree).collect();
+        let child1 = children[0];
+        let child2 = children[1];
+        let grandchild = child2.children(&app.tree).next().unwrap();
+
+        // Set active node to grandchild
+        app.active_node_id = Some(grandchild);
+
+        // First expand all to ensure initial state
+        expand_all(&mut app);
+
+        // Apply focus mode
+        focus(&mut app);
+
+        // Check that:
+        // - Grandchild (active) should be expanded
+        assert!(!app.tree.get(grandchild).unwrap().get().is_collapsed);
+
+        // - Child2 (parent of active) should be expanded
+        assert!(!app.tree.get(child2).unwrap().get().is_collapsed);
+
+        // - Root (ancestor) should be expanded
+        assert!(!app.tree.get(root).unwrap().get().is_collapsed);
+
+        // - Child1 (sibling of parent) should be collapsed
+        assert!(app.tree.get(child1).unwrap().get().is_collapsed);
+    }
+
+    #[test]
+    fn test_focus_on_root() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+
+        // Set active node to root
+        app.active_node_id = Some(root);
+
+        // First collapse all
+        collapse_all(&mut app);
+
+        // Apply focus mode
+        focus(&mut app);
+
+        // Root and all its descendants should be expanded
+        assert!(!app.tree.get(root).unwrap().get().is_collapsed);
+
+        // All children should be expanded when root is focused
+        for child_id in root.children(&app.tree) {
+            assert!(!app.tree.get(child_id).unwrap().get().is_collapsed);
+        }
+    }
+
+    #[test]
+    fn test_helper_collapse_siblings_recursive() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+
+        // Get children
+        let children: Vec<_> = root.children(&app.tree).collect();
+        let child1 = children[0];
+        let child2 = children[1];
+
+        // First expand all
+        expand_all(&mut app);
+
+        // Call helper on child2
+        collapse_siblings_recursive(&mut app.tree, child2);
+
+        // Child1 should be collapsed (sibling)
+        assert!(app.tree.get(child1).unwrap().get().is_collapsed);
+
+        // Child2 should still be expanded (not a sibling of itself)
+        assert!(!app.tree.get(child2).unwrap().get().is_collapsed);
+    }
+
+    #[test]
+    fn test_helper_expand_descendants() {
+        let mut app = create_test_app();
+        let root = app.root_id.unwrap();
+
+        // First collapse all
+        collapse_all(&mut app);
+
+        // Expand descendants of root
+        expand_descendants(&mut app.tree, root);
+
+        // All nodes should be expanded
+        for node in app.tree.iter() {
+            assert!(!node.get().is_collapsed);
+        }
     }
 }

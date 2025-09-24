@@ -159,18 +159,25 @@ impl LayoutEngine {
         // Update map width
         self.map_width = self.map_width.max(x + w);
 
-        // Recurse for children
-        for child_id in children {
-            self.calculate_x_and_lh(app, child_id, x);
+        // Recurse for children only if node is not collapsed
+        if !node.is_collapsed {
+            for child_id in children {
+                self.calculate_x_and_lh(app, child_id, x);
+            }
         }
     }
 
     fn calculate_h(&mut self, app: &AppState, node_id: NodeId) -> f64 {
+        let node = match app.tree.get(node_id) {
+            Some(n) => n.get(),
+            None => return 0.0,
+        };
+
         let children = Self::get_filtered_children(app, node_id);
         let at_the_end = Self::is_leaf_like(app, node_id, &children);
 
-        let h = if at_the_end {
-            // Leaf node: height is line height plus spacing
+        let h = if at_the_end || node.is_collapsed {
+            // Leaf node or collapsed node: height is line height plus spacing
             self.nodes
                 .get(&node_id)
                 .map(|layout| app.config.line_spacing as f64 + layout.lh)
@@ -341,8 +348,8 @@ mod tests {
 
         let layout = LayoutEngine::calculate_layout(&app);
 
-        // Should still have layout for all nodes
-        assert_eq!(layout.nodes.len(), 4);
+        // Should have layout for root, child1, and child2 (but not grandchild of collapsed child2)
+        assert_eq!(layout.nodes.len(), 3);
     }
 
     #[test]
@@ -527,5 +534,114 @@ mod tests {
         let viewport = (0.0, 0.0, 100.0, 100.0);
         let visible = engine.get_visible_nodes(viewport);
         assert_eq!(visible.len(), 2);
+    }
+
+    fn create_test_app_with_tree() -> AppState {
+        let config = AppConfig::default();
+        let mut app = AppState::new(config);
+
+        // Create a tree structure
+        let root = app.tree.new_node(Node::new("Root".to_string()));
+        let child1 = app.tree.new_node(Node::new("Child 1".to_string()));
+        let child2 = app.tree.new_node(Node::new("Child 2".to_string()));
+        let grandchild1 = app.tree.new_node(Node::new("Grandchild 1".to_string()));
+        let grandchild2 = app.tree.new_node(Node::new("Grandchild 2".to_string()));
+
+        root.append(child1, &mut app.tree);
+        root.append(child2, &mut app.tree);
+        child1.append(grandchild1, &mut app.tree);
+        child2.append(grandchild2, &mut app.tree);
+
+        app.root_id = Some(root);
+        app.active_node_id = Some(root);
+
+        app
+    }
+
+    #[test]
+    fn test_collapsed_nodes_not_in_layout() {
+        let mut app = create_test_app_with_tree();
+        let root = app.root_id.unwrap();
+        let child1 = root.children(&app.tree).next().unwrap();
+
+        // Collapse child1
+        if let Some(node) = app.tree.get_mut(child1) {
+            node.get_mut().is_collapsed = true;
+        }
+
+        // Calculate layout
+        let layout = LayoutEngine::calculate_layout(&app);
+
+        // Root and both children should be in layout
+        assert!(layout.nodes.contains_key(&root));
+        assert!(layout.nodes.contains_key(&child1));
+
+        let child2 = root.children(&app.tree).nth(1).unwrap();
+        assert!(layout.nodes.contains_key(&child2));
+
+        // Grandchildren of collapsed node should NOT be in layout
+        let grandchild1 = child1.children(&app.tree).next().unwrap();
+        assert!(!layout.nodes.contains_key(&grandchild1));
+
+        // Grandchild of non-collapsed node SHOULD be in layout
+        let grandchild2 = child2.children(&app.tree).next().unwrap();
+        assert!(layout.nodes.contains_key(&grandchild2));
+    }
+
+    #[test]
+    fn test_collapsed_node_height() {
+        let mut app = create_test_app_with_tree();
+        let root = app.root_id.unwrap();
+        let child1 = root.children(&app.tree).next().unwrap();
+
+        // Get layout with expanded node
+        let layout_expanded = LayoutEngine::calculate_layout(&app);
+        let root_expanded_height = layout_expanded.nodes.get(&root).unwrap().h;
+
+        // Collapse child1
+        if let Some(node) = app.tree.get_mut(child1) {
+            node.get_mut().is_collapsed = true;
+        }
+
+        // Get layout with collapsed node
+        let layout_collapsed = LayoutEngine::calculate_layout(&app);
+        let root_collapsed_height = layout_collapsed.nodes.get(&root).unwrap().h;
+
+        // Root should have smaller height when child is collapsed (fewer total descendants)
+        assert!(root_collapsed_height <= root_expanded_height);
+
+        // Child1 itself should have the same or smaller height when collapsed
+        let child1_collapsed_h = layout_collapsed.nodes.get(&child1).unwrap().h;
+        let child1_expanded_h = layout_expanded.nodes.get(&child1).unwrap().h;
+        assert!(child1_collapsed_h <= child1_expanded_h);
+    }
+
+    #[test]
+    fn test_all_collapsed_layout() {
+        let mut app = create_test_app_with_tree();
+
+        // Collapse all non-root nodes
+        for node in app.tree.iter_mut() {
+            if node.get().title != "Root" {
+                node.get_mut().is_collapsed = true;
+            }
+        }
+
+        // Calculate layout
+        let layout = LayoutEngine::calculate_layout(&app);
+
+        // Only root and its direct children should be in layout
+        let root = app.root_id.unwrap();
+        assert!(layout.nodes.contains_key(&root));
+
+        // Direct children should be in layout (even if collapsed)
+        for child_id in root.children(&app.tree) {
+            assert!(layout.nodes.contains_key(&child_id));
+
+            // But their children should NOT be
+            for grandchild_id in child_id.children(&app.tree) {
+                assert!(!layout.nodes.contains_key(&grandchild_id));
+            }
+        }
     }
 }
