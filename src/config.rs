@@ -43,9 +43,6 @@ pub struct AppConfig {
     #[serde(default = "default_line_spacing")]
     pub line_spacing: usize,
 
-    #[serde(default = "default_align_levels")]
-    pub align_levels: bool,
-
     #[serde(default = "default_symbol1")]
     pub symbol1: String,
 
@@ -103,7 +100,6 @@ impl Default for AppConfig {
             max_parent_node_width: default_max_parent_node_width(),
             max_leaf_node_width: default_max_leaf_node_width(),
             line_spacing: default_line_spacing(),
-            align_levels: default_align_levels(),
             symbol1: default_symbol1(),
             symbol2: default_symbol2(),
             show_hidden: default_show_hidden(),
@@ -130,9 +126,6 @@ fn default_max_leaf_node_width() -> usize {
 }
 fn default_line_spacing() -> usize {
     1
-}
-fn default_align_levels() -> bool {
-    false
 }
 fn default_symbol1() -> String {
     "✓".to_string()

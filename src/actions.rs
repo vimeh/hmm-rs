@@ -108,7 +108,6 @@ pub enum Action {
     DecreaseTextWidth,
     IncreaseLineSpacing,
     DecreaseLineSpacing,
-    ToggleAlign,
 
     // Help
     ShowHelp,
@@ -213,7 +212,6 @@ pub fn execute_action(action: Action, app: &mut AppState) -> Result<()> {
         Action::DecreaseTextWidth => decrease_text_width(app),
         Action::IncreaseLineSpacing => increase_line_spacing(app),
         Action::DecreaseLineSpacing => decrease_line_spacing(app),
-        Action::ToggleAlign => toggle_align(app),
 
         // Rank operations
         Action::IncreasePositiveRank => increase_positive_rank(app),
@@ -1299,14 +1297,6 @@ fn decrease_line_spacing(app: &mut AppState) {
     app.set_message(format!("Line spacing: {}", app.config.line_spacing));
 }
 
-fn toggle_align(app: &mut AppState) {
-    app.config.align_levels = !app.config.align_levels;
-    app.set_message(format!(
-        "Align levels: {}",
-        if app.config.align_levels { "ON" } else { "OFF" }
-    ));
-}
-
 // Rank operations
 fn increase_positive_rank(app: &mut AppState) {
     modify_rank(app, 1, 0);
@@ -2254,10 +2244,6 @@ mod tests {
         let initial_focus_lock = app.config.focus_lock;
         toggle_focus_lock(&mut app);
         assert_ne!(app.config.focus_lock, initial_focus_lock);
-
-        let initial_align = app.config.align_levels;
-        toggle_align(&mut app);
-        assert_ne!(app.config.align_levels, initial_align);
     }
 
     #[test]

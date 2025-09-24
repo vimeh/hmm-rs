@@ -121,7 +121,6 @@ fn handle_normal_mode(key: KeyEvent) -> Option<Action> {
         (Char('W'), KeyModifiers::SHIFT) => Some(Action::DecreaseTextWidth),
         (Char('z'), KeyModifiers::NONE) => Some(Action::DecreaseLineSpacing),
         (Char('Z'), KeyModifiers::SHIFT) => Some(Action::IncreaseLineSpacing),
-        (Char('|'), KeyModifiers::NONE) => Some(Action::ToggleAlign),
 
         // Hidden nodes
         (Char('H'), KeyModifiers::SHIFT) => Some(Action::ToggleHide),
