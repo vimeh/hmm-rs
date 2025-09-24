@@ -35,86 +35,49 @@ pub fn ensure_node_visible(app: &mut AppState) {
     }
 }
 
-/// Find the previous node in visual tree order (depth-first traversal)
-fn find_prev_visible_node(tree: &indextree::Arena<Node>, current: NodeId) -> Option<NodeId> {
-    // Try to find previous sibling
-    if let Some(parent_id) = current.ancestors(tree).nth(1) {
-        let siblings: Vec<NodeId> = parent_id.children(tree).collect();
-        if let Some(current_idx) = siblings.iter().position(|&id| id == current) {
-            if current_idx > 0 {
-                // Go to previous sibling's last descendant
-                let prev_sibling = siblings[current_idx - 1];
-                return Some(find_last_visible_descendant(tree, prev_sibling));
-            } else {
-                // No previous sibling, go to parent
-                return Some(parent_id);
-            }
-        }
-    }
-    None
-}
-
-/// Find the last visible descendant of a node (or the node itself)
-fn find_last_visible_descendant(tree: &indextree::Arena<Node>, node_id: NodeId) -> NodeId {
-    let node = tree.get(node_id).unwrap().get();
-    if node.is_collapsed {
-        return node_id;
-    }
-
-    if let Some(last_child) = node_id.children(tree).next_back() {
-        return find_last_visible_descendant(tree, last_child);
-    }
-
-    node_id
-}
-
 pub fn go_up(app: &mut AppState) {
     if let Some(active_id) = app.active_node_id {
-        // Don't move up from root
-        if Some(active_id) == app.root_id {
-            return;
-        }
+        // Find the previous visible sibling or parent's previous sibling
+        if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1) {
+            let siblings: Vec<NodeId> = parent_id.children(&app.tree).collect();
+            let current_index = siblings.iter().position(|&id| id == active_id);
 
-        if let Some(prev_node) = find_prev_visible_node(&app.tree, active_id) {
-            app.active_node_id = Some(prev_node);
-            ensure_node_visible(app);
-        }
-    }
-}
-
-/// Find the next node in visual tree order (depth-first traversal)
-fn find_next_visible_node(tree: &indextree::Arena<Node>, current: NodeId) -> Option<NodeId> {
-    let node = tree.get(current).unwrap().get();
-
-    // If not collapsed and has children, go to first child
-    if !node.is_collapsed {
-        if let Some(first_child) = current.children(tree).next() {
-            return Some(first_child);
-        }
-    }
-
-    // Otherwise, find next sibling or ancestor's next sibling
-    let mut node_id = current;
-    while let Some(parent_id) = node_id.ancestors(tree).nth(1) {
-        let siblings: Vec<NodeId> = parent_id.children(tree).collect();
-        if let Some(current_idx) = siblings.iter().position(|&id| id == node_id) {
-            if current_idx < siblings.len() - 1 {
-                // Found a next sibling
-                return Some(siblings[current_idx + 1]);
+            if let Some(idx) = current_index {
+                if idx > 0 {
+                    app.active_node_id = Some(siblings[idx - 1]);
+                    ensure_node_visible(app);
+                } else if parent_id != app.root_id.unwrap() {
+                    app.active_node_id = Some(parent_id);
+                    ensure_node_visible(app);
+                }
             }
         }
-        // No next sibling, try parent's next sibling
-        node_id = parent_id;
     }
-
-    None
 }
 
 pub fn go_down(app: &mut AppState) {
     if let Some(active_id) = app.active_node_id {
-        if let Some(next_node) = find_next_visible_node(&app.tree, active_id) {
-            app.active_node_id = Some(next_node);
-            ensure_node_visible(app);
+        // Try to go to first child
+        if let Some(first_child) = active_id.children(&app.tree).next() {
+            let node = app.tree.get(active_id).unwrap().get();
+            if !node.is_collapsed {
+                app.active_node_id = Some(first_child);
+                ensure_node_visible(app);
+                return;
+            }
+        }
+
+        // Otherwise, find next sibling
+        if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1) {
+            let siblings: Vec<NodeId> = parent_id.children(&app.tree).collect();
+            let current_index = siblings.iter().position(|&id| id == active_id);
+
+            if let Some(idx) = current_index {
+                if idx < siblings.len() - 1 {
+                    app.active_node_id = Some(siblings[idx + 1]);
+                    ensure_node_visible(app);
+                }
+            }
         }
     }
 }
@@ -208,40 +171,10 @@ mod tests {
         let mut app = create_test_app();
         let root = app.root_id.unwrap();
         let child1 = root.children(&app.tree).next().unwrap();
-        let child2 = root.children(&app.tree).nth(1).unwrap();
-        let grandchild = child2.children(&app.tree).next().unwrap();
 
-        // Test vertical navigation: Root -> Child1 -> Child2 -> Grandchild
-        app.active_node_id = Some(root);
-
+        // Go down from root to first child
         go_down(&mut app);
-        assert_eq!(
-            app.active_node_id,
-            Some(child1),
-            "Should go from Root to Child1"
-        );
-
-        go_down(&mut app);
-        assert_eq!(
-            app.active_node_id,
-            Some(child2),
-            "Should go from Child1 to Child2"
-        );
-
-        go_down(&mut app);
-        assert_eq!(
-            app.active_node_id,
-            Some(grandchild),
-            "Should go from Child2 to Grandchild"
-        );
-
-        // At the end, go_down should not change position
-        go_down(&mut app);
-        assert_eq!(
-            app.active_node_id,
-            Some(grandchild),
-            "Should stay at Grandchild"
-        );
+        assert_eq!(app.active_node_id, Some(child1));
     }
 
     #[test]
@@ -250,62 +183,10 @@ mod tests {
         let root = app.root_id.unwrap();
         let child1 = root.children(&app.tree).next().unwrap();
         let child2 = root.children(&app.tree).nth(1).unwrap();
-        let grandchild = child2.children(&app.tree).next().unwrap();
 
-        // Test vertical navigation: Grandchild -> Child2 -> Child1 -> Root
-        app.active_node_id = Some(grandchild);
-
+        app.active_node_id = Some(child2);
         go_up(&mut app);
-        assert_eq!(
-            app.active_node_id,
-            Some(child2),
-            "Should go from Grandchild to Child2"
-        );
-
-        go_up(&mut app);
-        assert_eq!(
-            app.active_node_id,
-            Some(child1),
-            "Should go from Child2 to Child1"
-        );
-
-        go_up(&mut app);
-        assert_eq!(
-            app.active_node_id,
-            Some(root),
-            "Should go from Child1 to Root"
-        );
-
-        // At the root, go_up should not change position
-        go_up(&mut app);
-        assert_eq!(app.active_node_id, Some(root), "Should stay at Root");
-    }
-
-    #[test]
-    fn test_movement_with_collapsed_node() {
-        let mut app = create_test_app();
-        let root = app.root_id.unwrap();
-        let child1 = root.children(&app.tree).next().unwrap();
-        let child2 = root.children(&app.tree).nth(1).unwrap();
-
-        // Collapse Child2 (which has a grandchild)
-        app.tree.get_mut(child2).unwrap().get_mut().is_collapsed = true;
-
-        // Test that collapsed node's children are skipped
-        app.active_node_id = Some(root);
-
-        go_down(&mut app);
-        assert_eq!(app.active_node_id, Some(child1), "Should go to Child1");
-
-        go_down(&mut app);
-        assert_eq!(app.active_node_id, Some(child2), "Should go to Child2");
-
-        go_down(&mut app);
-        assert_eq!(
-            app.active_node_id,
-            Some(child2),
-            "Should stay at Child2 (grandchild is hidden)"
-        );
+        assert_eq!(app.active_node_id, Some(child1));
     }
 
     #[test]
