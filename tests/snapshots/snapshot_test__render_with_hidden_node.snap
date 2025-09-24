@@ -3,11 +3,11 @@ source: tests/snapshot_test.rs
 expression: terminal.backend()
 ---
 "                                                                                "
-"                       ╭Features ─╫    ───✗ Failed Task                         "
-"                       │                                                        "
-" Mind Map Root ──      ┤                     ╭model.rs                          "
-"                       ╰Architecture ──      ┤                                  "
-"                                             ╰ui.rs                             "
+"                   ╭Features ─╫───✗ Failed Task                                 "
+"                   │                                                            "
+" Mind Map Root ────┤                 ╭model.rs                                  "
+"                   ╰Architecture ────┤                                          "
+"                                     ╰ui.rs                                     "
 "                                                                                "
 "                                                                                "
 "                                                                                "
