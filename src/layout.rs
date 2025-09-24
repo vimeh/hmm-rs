@@ -75,7 +75,7 @@ impl LayoutEngine {
                     .get(&node_id.ancestors(&app.tree).nth(1).unwrap())
                     .map(|p| p.w)
                     .unwrap_or(0.0)
-                + 10.0  // Space for connection lines (matching PHP conn_left_len + conn_right_len)
+                + 6.0 // Space for connection lines
         };
 
         // Determine if this is a leaf or collapsed node
