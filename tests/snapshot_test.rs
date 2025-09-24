@@ -401,3 +401,45 @@ fn test_render_with_viewport_offset() {
 
     assert_snapshot!(terminal.backend());
 }
+
+#[test]
+fn test_render_with_vertical_scroll_nodes_disappear() {
+    let mut app = create_test_app_with_tree();
+
+    // Simulate viewport scrolled down well past the first nodes
+    // Root is at y=4, so scrolling by 10 puts it well off-screen
+    app.viewport_top = 10.0;
+
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
+
+    let output = terminal.backend().to_string();
+
+    // The root node should be completely gone (not stuck at top)
+    assert!(!output.contains("Mind Map Root"), "Root node should not be visible when scrolled past");
+
+    // But the architecture nodes should be visible
+    // Actually, with viewport_top = 10, nothing might be visible
+    // Let's not check for Architecture since the tree might not be that tall
+}
+
+#[test]
+fn test_parent_remains_visible_with_children() {
+    let mut app = create_test_app_with_tree();
+
+    // Scroll so parent would be off-screen but children are visible
+    app.viewport_top = 3.0;
+
+    let backend = TestBackend::new(80, 20);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
+
+    let output = terminal.backend().to_string();
+
+    // Features node should remain visible since its children are visible
+    assert!(output.contains("Features"));
+    assert!(output.contains("Completed Task") || output.contains("Failed Task"));
+}

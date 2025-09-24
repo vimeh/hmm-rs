@@ -6,7 +6,7 @@ expression: terminal.backend()
 "                       ╭✓ Completed Task                                        "
 "         ╭Features ────┤                                                        "
 "         │             ╰✗ Failed Task                                           "
-"Mind Map Root                                                                   "
+"Root ────┤                                                                      "
 "         │                 ╭model.rs                                            "
 "         ╰Architecture ────┤                                                    "
 "                           ╰ui.rs                                               "
