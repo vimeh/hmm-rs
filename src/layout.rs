@@ -3,19 +3,26 @@ use crate::model::NodeId;
 use std::collections::HashMap;
 use unicode_width::UnicodeWidthStr;
 
-const WIDTH_TOLERANCE: f32 = 1.3;
+/// Ratio threshold for when text should wrap (1.3 = 130% of max width)
+const WRAP_THRESHOLD_RATIO: f32 = 1.3;
+
+/// Left padding for the root node
 const LEFT_PADDING: usize = 1;
+
 /// Space allocated for connection lines between parent and child nodes
 pub const NODE_CONNECTION_SPACING: f64 = 6.0;
 
 #[derive(Debug, Clone)]
 pub struct LayoutNode {
+    // Position
     pub x: f64,
     pub y: f64,
-    pub w: f64,
-    pub h: f64,
-    pub lh: f64, // Line height
-    pub yo: f64, // Y offset for centering
+    // Dimensions
+    pub w: f64,  // Width
+    pub h: f64,  // Height
+    pub lh: f64, // Line height (number of text lines)
+    // Offsets
+    pub yo: f64, // Y offset for vertical centering
     pub xo: f64, // X offset for unicode width compensation
 }
 
@@ -64,36 +71,57 @@ impl LayoutEngine {
         engine
     }
 
+    /// Get children of a node that should be displayed (respecting hidden nodes)
+    fn get_filtered_children(app: &AppState, node_id: NodeId) -> Vec<NodeId> {
+        node_id
+            .children(&app.tree)
+            .filter(|child_id| {
+                if !app.config.show_hidden {
+                    app.tree
+                        .get(*child_id)
+                        .map(|n| !n.get().is_hidden())
+                        .unwrap_or(false)
+                } else {
+                    true
+                }
+            })
+            .collect()
+    }
+
+    /// Check if a node should be treated as a leaf (collapsed or no children)
+    fn is_leaf_like(app: &AppState, node_id: NodeId, children: &[NodeId]) -> bool {
+        let node = match app.tree.get(node_id) {
+            Some(n) => n.get(),
+            None => return true,
+        };
+
+        children.is_empty() || node.is_collapsed
+    }
+
     fn calculate_x_and_lh(&mut self, app: &AppState, node_id: NodeId, parent_x: f64) {
-        let node = app.tree.get(node_id).unwrap().get();
+        let node = match app.tree.get(node_id) {
+            Some(n) => n.get(),
+            None => return,
+        };
 
         // Calculate x position
-        let x = if node_id == app.root_id.unwrap() {
+        let x = if Some(node_id) == app.root_id {
             LEFT_PADDING as f64
         } else {
-            parent_x
-                + self
-                    .nodes
-                    .get(&node_id.ancestors(&app.tree).nth(1).unwrap())
-                    .map(|p| p.w)
-                    .unwrap_or(0.0)
-                + NODE_CONNECTION_SPACING
+            // Get parent node's width
+            let parent_width = node_id
+                .ancestors(&app.tree)
+                .nth(1)
+                .and_then(|parent| self.nodes.get(&parent))
+                .map(|p| p.w)
+                .unwrap_or(0.0);
+
+            parent_x + parent_width + NODE_CONNECTION_SPACING
         };
 
-        // Determine if this is a leaf or collapsed node
-        let children: Vec<NodeId> = if !app.config.show_hidden {
-            node_id
-                .children(&app.tree)
-                .filter(|cid| {
-                    let child = app.tree.get(*cid).unwrap().get();
-                    !child.is_hidden()
-                })
-                .collect()
-        } else {
-            node_id.children(&app.tree).collect()
-        };
-
-        let at_the_end = children.is_empty() || node.is_collapsed;
+        // Get children (respecting hidden nodes)
+        let children = Self::get_filtered_children(app, node_id);
+        let at_the_end = Self::is_leaf_like(app, node_id, &children);
 
         // Get max width for this node type
         let max_width = if at_the_end {
@@ -104,7 +132,7 @@ impl LayoutEngine {
 
         // Calculate width and line height
         let title_width = node.title.width();
-        let (w, lh) = if title_width as f32 > WIDTH_TOLERANCE * max_width as f32 {
+        let (w, lh) = if title_width as f32 > WRAP_THRESHOLD_RATIO * max_width as f32 {
             // Need to wrap text
             let lines = wrap_text(&node.title, max_width);
             let max_line_width = lines.iter().map(|l| l.width()).max().unwrap_or(0);
@@ -137,35 +165,29 @@ impl LayoutEngine {
     }
 
     fn calculate_h(&mut self, app: &AppState, node_id: NodeId) -> f64 {
-        let node = app.tree.get(node_id).unwrap().get();
-
-        let children: Vec<NodeId> = if !app.config.show_hidden {
-            node_id
-                .children(&app.tree)
-                .filter(|cid| {
-                    let child = app.tree.get(*cid).unwrap().get();
-                    !child.is_hidden()
-                })
-                .collect()
-        } else {
-            node_id.children(&app.tree).collect()
-        };
-
-        let at_the_end = children.is_empty() || node.is_collapsed;
+        let children = Self::get_filtered_children(app, node_id);
+        let at_the_end = Self::is_leaf_like(app, node_id, &children);
 
         let h = if at_the_end {
             // Leaf node: height is line height plus spacing
-            let layout = self.nodes.get(&node_id).unwrap();
-            app.config.line_spacing as f64 + layout.lh
+            self.nodes
+                .get(&node_id)
+                .map(|layout| app.config.line_spacing as f64 + layout.lh)
+                .unwrap_or(app.config.line_spacing as f64)
         } else {
             // Parent node: height is sum of children or own line height
-            let mut children_height = 0.0;
-            for child_id in &children {
-                children_height += self.calculate_h(app, *child_id);
-            }
+            let children_height: f64 = children
+                .iter()
+                .map(|child_id| self.calculate_h(app, *child_id))
+                .sum();
 
-            let layout = self.nodes.get(&node_id).unwrap();
-            children_height.max(layout.lh + app.config.line_spacing as f64)
+            let own_height = self
+                .nodes
+                .get(&node_id)
+                .map(|layout| layout.lh + app.config.line_spacing as f64)
+                .unwrap_or(app.config.line_spacing as f64);
+
+            children_height.max(own_height)
         };
 
         // Update the layout node with calculated height
@@ -177,7 +199,10 @@ impl LayoutEngine {
     }
 
     fn calculate_y(&mut self, app: &AppState, node_id: NodeId, current_y: f64) {
-        let node = app.tree.get(node_id).unwrap().get();
+        let node = match app.tree.get(node_id) {
+            Some(n) => n.get(),
+            None => return,
+        };
 
         // Set this node's y position
         if let Some(layout) = self.nodes.get_mut(&node_id) {
@@ -188,31 +213,23 @@ impl LayoutEngine {
         }
 
         // Update map boundaries
-        let layout = self.nodes.get(&node_id).unwrap();
-        self.map_bottom = self
-            .map_bottom
-            .max(current_y + layout.lh + app.config.line_spacing as f64);
-        self.map_top = self.map_top.min(current_y);
+        if let Some(layout) = self.nodes.get(&node_id) {
+            self.map_bottom = self
+                .map_bottom
+                .max(current_y + layout.lh + app.config.line_spacing as f64);
+            self.map_top = self.map_top.min(current_y);
+        }
 
         // Process children
         if !node.is_collapsed {
-            let children: Vec<NodeId> = if !app.config.show_hidden {
-                node_id
-                    .children(&app.tree)
-                    .filter(|cid| {
-                        let child = app.tree.get(*cid).unwrap().get();
-                        !child.is_hidden()
-                    })
-                    .collect()
-            } else {
-                node_id.children(&app.tree).collect()
-            };
-
+            let children = Self::get_filtered_children(app, node_id);
             let mut child_y = current_y;
+
             for child_id in children {
                 self.calculate_y(app, child_id, child_y);
-                let child_layout = self.nodes.get(&child_id).unwrap();
-                child_y += child_layout.h;
+                if let Some(child_layout) = self.nodes.get(&child_id) {
+                    child_y += child_layout.h;
+                }
             }
         }
 
@@ -222,10 +239,12 @@ impl LayoutEngine {
     fn calculate_xo(&mut self, app: &AppState) {
         // Calculate x offset to compensate for unicode width differences
         for (node_id, layout) in self.nodes.iter_mut() {
-            let node = app.tree.get(*node_id).unwrap().get();
-            let title_len = node.title.len();
-            let title_width = node.title.width();
-            layout.xo = (title_len - title_width) as f64;
+            if let Some(node_ref) = app.tree.get(*node_id) {
+                let node = node_ref.get();
+                let title_len = node.title.len();
+                let title_width = node.title.width();
+                layout.xo = (title_len - title_width) as f64;
+            }
         }
     }
 
@@ -235,36 +254,41 @@ impl LayoutEngine {
         self.nodes
             .iter()
             .filter_map(|(id, layout)| {
-                if layout.x + layout.w >= vp_left
+                let is_visible = layout.x + layout.w >= vp_left
                     && layout.x <= vp_right
                     && layout.y + layout.lh >= vp_top
-                    && layout.y <= vp_bottom
-                {
-                    Some(*id)
-                } else {
-                    None
-                }
+                    && layout.y <= vp_bottom;
+
+                is_visible.then_some(*id)
             })
             .collect()
     }
 }
 
+/// Wrap text to fit within a maximum width, breaking at word boundaries
 fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.is_empty() {
+        return vec![text.to_string()];
+    }
+
     let mut lines = Vec::new();
     let mut current_line = String::new();
     let mut current_width = 0;
 
-    for word in text.split_whitespace() {
+    for word in words {
         let word_width = word.width();
+        let needs_space = !current_line.is_empty();
+        let space_width = if needs_space { 1 } else { 0 };
 
-        if current_width > 0 && current_width + 1 + word_width > max_width {
-            // Need to start a new line
+        if current_width > 0 && current_width + space_width + word_width > max_width {
+            // Start a new line
             lines.push(current_line);
             current_line = word.to_string();
             current_width = word_width;
         } else {
             // Add to current line
-            if !current_line.is_empty() {
+            if needs_space {
                 current_line.push(' ');
                 current_width += 1;
             }
@@ -275,10 +299,6 @@ fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
 
     if !current_line.is_empty() {
         lines.push(current_line);
-    }
-
-    if lines.is_empty() {
-        lines.push(text.to_string());
     }
 
     lines
@@ -331,8 +351,13 @@ mod tests {
         assert_eq!(layout.nodes.len(), 4);
 
         // Root should be at leftmost position
-        let root_layout = layout.nodes.get(&app.root_id.unwrap()).unwrap();
-        assert_eq!(root_layout.x, LEFT_PADDING as f64);
+        if let Some(root_id) = app.root_id {
+            let root_layout = layout
+                .nodes
+                .get(&root_id)
+                .expect("Root node should have a layout");
+            assert_eq!(root_layout.x, LEFT_PADDING as f64);
+        }
 
         // Map dimensions should be positive
         assert!(layout.map_width > 0.0);
@@ -344,8 +369,13 @@ mod tests {
         let mut app = create_test_app();
 
         // Collapse child2
-        let child2_id = app.root_id.unwrap().children(&app.tree).nth(1).unwrap();
-        app.tree.get_mut(child2_id).unwrap().get_mut().is_collapsed = true;
+        if let Some(root_id) = app.root_id {
+            if let Some(child2_id) = root_id.children(&app.tree).nth(1) {
+                if let Some(node) = app.tree.get_mut(child2_id) {
+                    node.get_mut().is_collapsed = true;
+                }
+            }
+        }
 
         let layout = LayoutEngine::calculate_layout(&app);
 
@@ -386,8 +416,13 @@ mod tests {
         let mut app = create_test_app();
 
         // Mark a child as hidden
-        let child1_id = app.root_id.unwrap().children(&app.tree).next().unwrap();
-        app.tree.get_mut(child1_id).unwrap().get_mut().title = "[HIDDEN] Child 1".to_string();
+        if let Some(root_id) = app.root_id {
+            if let Some(child1_id) = root_id.children(&app.tree).next() {
+                if let Some(node) = app.tree.get_mut(child1_id) {
+                    node.get_mut().title = "[HIDDEN] Child 1".to_string();
+                }
+            }
+        }
 
         // Hide hidden nodes
         app.config.show_hidden = false;
@@ -397,7 +432,9 @@ mod tests {
         // When show_hidden is false, hidden nodes are filtered out during layout calculation
         // So we check that the layout was calculated (has nodes) but the hidden node might not be included
         assert!(!layout.nodes.is_empty());
-        assert!(layout.nodes.contains_key(&app.root_id.unwrap()));
+        if let Some(root_id) = app.root_id {
+            assert!(layout.nodes.contains_key(&root_id));
+        }
     }
 
     #[test]
@@ -406,11 +443,20 @@ mod tests {
         let layout = LayoutEngine::calculate_layout(&app);
 
         // Get root and its first child
-        let root_id = app.root_id.unwrap();
-        let child1_id = root_id.children(&app.tree).next().unwrap();
+        let root_id = app.root_id.expect("Test app should have a root");
+        let child1_id = root_id
+            .children(&app.tree)
+            .next()
+            .expect("Root should have at least one child");
 
-        let root_layout = layout.nodes.get(&root_id).unwrap();
-        let child_layout = layout.nodes.get(&child1_id).unwrap();
+        let root_layout = layout
+            .nodes
+            .get(&root_id)
+            .expect("Root should have a layout");
+        let child_layout = layout
+            .nodes
+            .get(&child1_id)
+            .expect("Child should have a layout");
 
         // Child should be positioned at parent_x + parent_width + NODE_CONNECTION_SPACING
         let expected_child_x = root_layout.x + root_layout.w + NODE_CONNECTION_SPACING;
@@ -427,12 +473,18 @@ mod tests {
         let layout = LayoutEngine::calculate_layout(&app);
 
         // Get root's children
-        let root_id = app.root_id.unwrap();
+        let root_id = app.root_id.expect("Test app should have a root");
         let children: Vec<_> = root_id.children(&app.tree).collect();
         assert!(children.len() >= 2, "Test requires at least 2 children");
 
-        let child1_layout = layout.nodes.get(&children[0]).unwrap();
-        let child2_layout = layout.nodes.get(&children[1]).unwrap();
+        let child1_layout = layout
+            .nodes
+            .get(&children[0])
+            .expect("First child should have a layout");
+        let child2_layout = layout
+            .nodes
+            .get(&children[1])
+            .expect("Second child should have a layout");
 
         // Both children should have the same x position
         assert_eq!(
@@ -458,9 +510,15 @@ mod tests {
 
         let layout = LayoutEngine::calculate_layout(&app);
 
-        let root_layout = layout.nodes.get(&root).unwrap();
-        let child_layout = layout.nodes.get(&child).unwrap();
-        let grandchild_layout = layout.nodes.get(&grandchild).unwrap();
+        let root_layout = layout.nodes.get(&root).expect("Root should have a layout");
+        let child_layout = layout
+            .nodes
+            .get(&child)
+            .expect("Child should have a layout");
+        let grandchild_layout = layout
+            .nodes
+            .get(&grandchild)
+            .expect("Grandchild should have a layout");
 
         // Check consistent spacing at each level
         let spacing1 = child_layout.x - (root_layout.x + root_layout.w);
