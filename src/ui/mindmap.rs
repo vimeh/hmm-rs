@@ -15,13 +15,15 @@ use ratatui::{
 // Mind map renderer
 pub struct MindMapRenderer<'a> {
     app: &'a AppState,
-    layout: &'a LayoutEngine,
     view_map: &'a ViewMap,
 }
 
 impl<'a> MindMapRenderer<'a> {
-    pub fn new(app: &'a AppState, layout: &'a LayoutEngine, view_map: &'a ViewMap) -> Self {
-        Self { app, layout, view_map }
+    pub fn new(app: &'a AppState, _layout: &'a LayoutEngine, view_map: &'a ViewMap) -> Self {
+        Self {
+            app,
+            view_map,
+        }
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect) {
@@ -47,7 +49,9 @@ impl<'a> MindMapRenderer<'a> {
     fn draw_all_nodes(&self, canvas: &mut BufferCanvas) {
         // Iterate over the pre-calculated visible nodes
         for (node_id, view_node) in self.view_map {
-            let Some(node_ref) = self.app.tree.get(*node_id) else { continue };
+            let Some(node_ref) = self.app.tree.get(*node_id) else {
+                continue;
+            };
             let node = node_ref.get();
             let style = self.get_node_style(*node_id, node);
 

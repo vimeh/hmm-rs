@@ -6,13 +6,11 @@ pub type StyleBuffer = Vec<Vec<Style>>;
 
 // Constants for rendering
 pub const CURSOR_INDICATOR: char = '▌';
-pub const NODE_MIDDLE_Y_OFFSET: f64 = 0.6;
-pub const VERTICAL_CONNECTOR_OFFSET: f64 = 1.0;
-pub const MIDDLE_CONNECTOR_Y_OFFSET: f64 = 0.2;
 pub const STATUS_EDIT_PREFIX: &str = "Edit: ";
 pub const STATUS_SEARCH_PREFIX: &str = "Search: ";
 
 // Connection line constants
+#[allow(dead_code)]
 pub mod connections {
     pub const SINGLE: &str = "─────";
     pub const SINGLE_HIDDEN: &str = "─╫───";
@@ -24,6 +22,7 @@ pub mod connections {
 }
 
 // Junction characters
+#[allow(dead_code)]
 pub mod junction {
     pub const VERTICAL: char = '│';
     pub const TOP_CORNER: char = '╭';

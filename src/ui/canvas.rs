@@ -28,12 +28,6 @@ impl BufferCanvas {
         }
     }
 
-    pub fn draw_text(&mut self, x: usize, y: usize, text: &str) {
-        for (i, ch) in text.chars().enumerate() {
-            self.set_char(x + i, y, ch);
-        }
-    }
-
     pub fn draw_styled_text(&mut self, x: usize, y: usize, text: &str, style: Style) {
         for (i, ch) in text.chars().enumerate() {
             if self.in_bounds(x + i, y) {

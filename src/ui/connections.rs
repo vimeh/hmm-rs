@@ -31,10 +31,14 @@ impl<'a> ConnectionRenderer<'a> {
 
     /// Recursively draw connections for a node and its visible children.
     pub fn draw_connections_for_node(&mut self, node_id: NodeId) {
-        let Some(node_ref) = self.app.tree.get(node_id) else { return };
+        let Some(node_ref) = self.app.tree.get(node_id) else {
+            return;
+        };
         let node = node_ref.get();
 
-        let Some(parent_view) = self.view_map.get(&node_id) else { return };
+        let Some(parent_view) = self.view_map.get(&node_id) else {
+            return;
+        };
 
         let all_children: Vec<_> = node_id.children(&self.app.tree).collect();
         let visible_children: Vec<_> = all_children
@@ -52,8 +56,14 @@ impl<'a> ConnectionRenderer<'a> {
         if node.is_collapsed && !all_children.is_empty() {
             self.draw_collapsed_indicator(parent_exit_x, parent_exit_y, has_hidden);
         } else if !visible_children.is_empty() {
-            self.draw_child_connections(parent_exit_x, parent_exit_y, &visible_children, has_hidden);
-        } else if has_hidden { // Only hidden children
+            self.draw_child_connections(
+                parent_exit_x,
+                parent_exit_y,
+                &visible_children,
+                has_hidden,
+            );
+        } else if has_hidden {
+            // Only hidden children
             self.draw_hidden_only_indicator(parent_exit_x, parent_exit_y);
         }
 
@@ -78,20 +88,39 @@ impl<'a> ConnectionRenderer<'a> {
             let child_x = child_view.screen_rect.x as i32;
             let child_y = child_view.connection_y as i32;
 
-            let connector = if has_hidden { connections::SINGLE_HIDDEN } else { connections::SINGLE };
+            let connector = if has_hidden {
+                connections::SINGLE_HIDDEN
+            } else {
+                connections::SINGLE
+            };
             self.draw_text(parent_x, parent_y.min(child_y), connector);
 
             // Draw vertical connection if needed
             if (parent_y - child_y).abs() > 0 {
                 let spine_x = child_x - 2;
-                self.draw_vertical_line(spine_x, parent_y.min(child_y), parent_y.max(child_y), junction::VERTICAL);
+                self.draw_vertical_line(
+                    spine_x,
+                    parent_y.min(child_y),
+                    parent_y.max(child_y),
+                    junction::VERTICAL,
+                );
 
                 // Draw corners
-                let corner = if child_y > parent_y { junction::BOTTOM_CORNER } else { junction::TOP_CORNER };
-                self.canvas.set_char(spine_x as usize, child_y as usize, corner);
+                let corner = if child_y > parent_y {
+                    junction::BOTTOM_CORNER
+                } else {
+                    junction::TOP_CORNER
+                };
+                self.canvas
+                    .set_char(spine_x as usize, child_y as usize, corner);
 
-                let top_corner = if child_y > parent_y { junction::TOP_CORNER } else { junction::BOTTOM_CORNER };
-                self.canvas.set_char(spine_x as usize, parent_y.min(child_y) as usize, top_corner);
+                let top_corner = if child_y > parent_y {
+                    junction::TOP_CORNER
+                } else {
+                    junction::BOTTOM_CORNER
+                };
+                self.canvas
+                    .set_char(spine_x as usize, parent_y.min(child_y) as usize, top_corner);
             }
         } else {
             // Multiple children
@@ -99,7 +128,11 @@ impl<'a> ConnectionRenderer<'a> {
             let last_child_view = self.view_map.get(children.last().unwrap()).unwrap();
 
             // 1. Draw horizontal line from parent to the spine
-            let connector = if has_hidden { connections::MULTI_HIDDEN } else { connections::MULTI };
+            let connector = if has_hidden {
+                connections::MULTI_HIDDEN
+            } else {
+                connections::MULTI
+            };
             self.draw_text(parent_x, parent_y, " "); // Add space after parent text
             self.draw_text(parent_x + 1, parent_y, connector); // Draw connector after the space
 
@@ -133,7 +166,11 @@ impl<'a> ConnectionRenderer<'a> {
     }
 
     fn draw_collapsed_indicator(&mut self, x: i32, y: i32, has_hidden: bool) {
-        let text = if has_hidden { connections::COLLAPSED_HIDDEN } else { connections::COLLAPSED };
+        let text = if has_hidden {
+            connections::COLLAPSED_HIDDEN
+        } else {
+            connections::COLLAPSED
+        };
         self.draw_text(x, y, text);
     }
 
@@ -154,15 +191,6 @@ impl<'a> ConnectionRenderer<'a> {
         }
     }
 
-    fn draw_horizontal_line(&mut self, x1: i32, x2: i32, y: i32, ch: char) {
-        if y >= 0 && y < self.area.height as i32 {
-            for x in min(x1, x2)..=max(x1, x2) {
-                if x >= 0 && x < self.area.width as i32 {
-                    self.canvas.set_char(x as usize, y as usize, ch);
-                }
-            }
-        }
-    }
 
     fn draw_vertical_line(&mut self, x: i32, y1: i32, y2: i32, ch: char) {
         if x >= 0 && x < self.area.width as i32 {
@@ -177,7 +205,7 @@ impl<'a> ConnectionRenderer<'a> {
     /// Overwrites a character at a junction point, for example turning a '|' into a '├'.
     fn fix_junction(&mut self, x: i32, y: i32, ch: char) {
         if self.is_in_bounds(x, y) {
-             self.canvas.set_char(x as usize, y as usize, ch);
+            self.canvas.set_char(x as usize, y as usize, ch);
         }
     }
 

@@ -43,8 +43,12 @@ impl<'a> ViewCalculator<'a> {
 
     /// Recursively computes the view for a node and its children.
     fn compute_node_view(&mut self, node_id: NodeId, _parent_y_in_world: f64) {
-        let Some(node_ref) = self.app.tree.get(node_id) else { return };
-        let Some(node_layout) = self.layout.nodes.get(&node_id) else { return };
+        let Some(node_ref) = self.app.tree.get(node_id) else {
+            return;
+        };
+        let Some(node_layout) = self.layout.nodes.get(&node_id) else {
+            return;
+        };
         let node = node_ref.get();
 
         // Use the absolute position from the layout
@@ -55,7 +59,12 @@ impl<'a> ViewCalculator<'a> {
         let height = node_layout.lh as u16;
         let final_screen_y = self.get_adjusted_y(node_id, ideal_screen_y, height);
 
-        let screen_rect = Rect::new(screen_x, final_screen_y as u16, node_layout.w as u16, height);
+        let screen_rect = Rect::new(
+            screen_x,
+            final_screen_y as u16,
+            node_layout.w as u16,
+            height,
+        );
 
         // Only add nodes that are plausibly on screen to the map.
         if final_screen_y < self.area.height as i32 && (final_screen_y + height as i32) >= 0 {
@@ -90,7 +99,8 @@ impl<'a> ViewCalculator<'a> {
     /// Get visible (non-hidden) children of a node
     fn get_visible_children(&self, node_id: NodeId) -> Vec<NodeId> {
         if !self.app.config.show_hidden {
-            node_id.children(&self.app.tree)
+            node_id
+                .children(&self.app.tree)
                 .filter(|child_id| {
                     if let Some(child_ref) = self.app.tree.get(*child_id) {
                         let child = child_ref.get();
@@ -109,7 +119,8 @@ impl<'a> ViewCalculator<'a> {
     fn has_visible_children_in_viewport(&self, node_id: NodeId) -> bool {
         for child_id in self.get_visible_children(node_id) {
             if let Some(child_layout) = self.layout.nodes.get(&child_id) {
-                let child_screen_y = (child_layout.y + child_layout.yo - self.app.viewport_top) as i32;
+                let child_screen_y =
+                    (child_layout.y + child_layout.yo - self.app.viewport_top) as i32;
                 if child_screen_y >= 0 && child_screen_y < self.area.height as i32 {
                     return true;
                 }

@@ -66,8 +66,10 @@ fn test_buffer_canvas() {
     canvas.set_char(5, 2, 'X');
     assert_eq!(canvas.char_buffer[2][5], 'X');
 
-    // Test draw_text
-    canvas.draw_text(0, 0, "Hello");
+    // Test drawing text using set_char
+    for (i, ch) in "Hello".chars().enumerate() {
+        canvas.set_char(i, 0, ch);
+    }
     assert_eq!(&canvas.char_buffer[0][0..5], ['H', 'e', 'l', 'l', 'o']);
 
     // Test bounds checking

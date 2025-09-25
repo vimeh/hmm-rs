@@ -4,8 +4,8 @@ mod constants;
 mod help;
 mod mindmap;
 mod status_line;
-mod view;
 pub mod text;
+mod view;
 
 #[cfg(test)]
 mod tests;
