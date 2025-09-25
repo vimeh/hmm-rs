@@ -95,7 +95,11 @@ impl<'a> ConnectionRenderer<'a> {
             } else {
                 connections::SINGLE
             };
-            self.draw_text(parent_x, parent_y.min(child_y), connector);
+
+            // Draw connector with proper spacing
+            // The layout will handle the spacing for single-child chains
+            self.draw_text(parent_x, parent_y.min(child_y), " ");
+            self.draw_text(parent_x + 1, parent_y.min(child_y), connector);
 
             // Draw vertical connection if needed
             if (parent_y - child_y).abs() > 0 {
@@ -166,9 +170,11 @@ impl<'a> ConnectionRenderer<'a> {
 
                 if is_root_child {
                     // For direct children of root, junction is at the spine
-                    self.canvas.set_char(spine_x as usize, child_y as usize, junction_char);
+                    self.canvas
+                        .set_char(spine_x as usize, child_y as usize, junction_char);
                     // Always draw a space after the junction
-                    self.canvas.set_char((spine_x + 1) as usize, child_y as usize, ' ');
+                    self.canvas
+                        .set_char((spine_x + 1) as usize, child_y as usize, ' ');
                     // Draw horizontal line from after the space to before the text
                     for x in (spine_x + 2)..child_x {
                         self.canvas.set_char(x as usize, child_y as usize, '─');

@@ -110,14 +110,27 @@ impl LayoutEngine {
             LEFT_PADDING as f64
         } else {
             // Get parent node's width
-            let parent_width = node_id
-                .ancestors(&app.tree)
-                .nth(1)
+            let parent_id = node_id.ancestors(&app.tree).nth(1);
+            let parent_width = parent_id
                 .and_then(|parent| self.nodes.get(&parent))
                 .map(|p| p.w)
                 .unwrap_or(0.0);
 
-            parent_x + parent_width + NODE_CONNECTION_SPACING
+            // Check if this is part of a single-child chain (parent has only one child)
+            let is_single_chain = parent_id
+                .map(|parent| {
+                    let parent_children = Self::get_filtered_children(app, parent);
+                    parent_children.len() == 1 && parent_children[0] == node_id
+                })
+                .unwrap_or(false);
+
+            // Add extra space for single-child chains (for the space after connector)
+            let spacing = if is_single_chain {
+                7.0
+            } else {
+                NODE_CONNECTION_SPACING
+            };
+            parent_x + parent_width + spacing
         };
 
         // Get children (respecting hidden nodes)
