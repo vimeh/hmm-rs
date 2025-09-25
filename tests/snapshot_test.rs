@@ -1,9 +1,11 @@
 use hmm_rs::app::{AppMode, AppState};
 use hmm_rs::config::AppConfig;
 use hmm_rs::model::Node;
+use hmm_rs::parser;
 use hmm_rs::ui;
 use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
+use std::path::Path;
 
 fn create_test_app_with_tree() -> AppState {
     let config = AppConfig::default();
@@ -445,4 +447,146 @@ fn test_parent_remains_visible_with_children() {
     // Features node should remain visible since its children are visible
     assert!(output.contains("Features"));
     assert!(output.contains("Completed Task") || output.contains("Failed Task"));
+}
+
+// Helper function to load the project.hmm test file
+fn load_project_hmm() -> AppState {
+    let config = AppConfig::default();
+    let mut app = AppState::new(config);
+
+    let path = Path::new("tests/fixtures/project.hmm");
+    if let Ok((tree, root_id)) = parser::load_file(path) {
+        app.tree = tree;
+        app.root_id = Some(root_id);
+        app.active_node_id = Some(root_id);
+    } else {
+        panic!("Failed to load project.hmm test file");
+    }
+
+    app
+}
+
+#[test]
+fn test_project_hmm_deep_scroll_sticky_parents() {
+    // Test scrolling to deep children where parents should stick at top
+    // This should show the "Components" node stuck at y=0 while viewing its deep children
+    let mut app = load_project_hmm();
+
+    // Scroll down to show "Shopping Cart" children
+    // Shopping Cart is around y=14, its children are deeper
+    // We want Components (y~4) to be sticky at top
+    app.viewport_top = 12.0;
+
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
+
+    // The snapshot should show:
+    // - "Components" stuck at the top (y=0)
+    // - Connection lines properly drawn from Components to its children
+    // - Shopping Cart and its children visible
+    // - Proper junction characters (┴ not ╰ when siblings below viewport)
+    assert_snapshot!(terminal.backend());
+}
+
+#[test]
+fn test_project_hmm_sticky_grandparent_connections() {
+    // Test multi-level sticky parents - both parent and grandparent sticky
+    let mut app = load_project_hmm();
+
+    // Scroll to show OAuth Integration children
+    // This puts both "Backend" and "Node.js API" as sticky
+    app.viewport_top = 28.0;
+
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
+
+    // Should show:
+    // - "Backend" stuck at top
+    // - "Node.js API" also stuck (below Backend)
+    // - "Authentication" visible with children
+    // - All connection lines intact between levels
+    assert_snapshot!(terminal.backend());
+}
+
+#[test]
+fn test_project_hmm_scroll_to_oauth_integration() {
+    // Specifically test the OAuth Integration scenario from the bug report
+    let mut app = load_project_hmm();
+
+    // Scroll to show Google Auth / Facebook Auth
+    // Their parent "OAuth Integration" should be sticky
+    app.viewport_top = 31.0;
+
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
+
+    // Should show:
+    // - OAuth Integration parent connected to Authentication
+    // - Google Auth and Facebook Auth visible
+    // - Proper connection lines, not broken
+    assert_snapshot!(terminal.backend());
+}
+
+#[test]
+fn test_project_hmm_bottom_child_junction_characters() {
+    // Test that the correct junction character is used for bottom visible child
+    // when there are siblings below the viewport
+    let mut app = load_project_hmm();
+
+    // Scroll to a position where some siblings are cut off
+    // E.g., showing only first few items of Frontend->React Application->Components children
+    app.viewport_top = 5.0;
+
+    let backend = TestBackend::new(120, 25);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
+
+    // When there are hidden siblings below, the last visible child
+    // should use ┴ (BOTTOM_TEE) not ╰ (BOTTOM_CORNER)
+    assert_snapshot!(terminal.backend());
+}
+
+#[test]
+fn test_project_hmm_database_section_scroll() {
+    // Test scrolling to the Database section
+    let mut app = load_project_hmm();
+
+    // Scroll to show Database->PostgreSQL->Tables
+    app.viewport_top = 48.0;
+
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
+
+    // Should show:
+    // - Database and PostgreSQL potentially sticky if children visible
+    // - Tables section with proper connections
+    assert_snapshot!(terminal.backend());
+}
+
+#[test]
+fn test_project_hmm_testing_section_deep_scroll() {
+    // Test the Testing section with E2E Tests children
+    let mut app = load_project_hmm();
+
+    // Scroll to show Cypress Tests / User Flow Tests
+    app.viewport_top = 75.0;
+
+    let backend = TestBackend::new(120, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| ui::render(frame, &mut app)).unwrap();
+
+    // Should show:
+    // - Testing stuck at top if children are visible
+    // - E2E Tests and its children with proper connections
+    assert_snapshot!(terminal.backend());
 }
