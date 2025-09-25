@@ -1,15 +1,16 @@
 ---
 source: tests/snapshot_test.rs
+assertion_line: 131
 expression: terminal.backend()
 ---
 "                                                                                "
-"                                 ╭✓ Completed Task                              "
-"                   ╭Features ────┤                                              "
-"                   │             ╰✗ Failed Task                                 "
+"                                  ╭ ✓ Completed Task                            "
+"                   ╭ Features ────┤                                             "
+"                   │              ╰ ✗ Failed Task                               "
 " Mind Map Root ────┤                                                            "
-"                   │                 ╭model.rs                                  "
-"                   ╰Architecture ────┤                                          "
-"                                     ╰ui.rs                                     "
+"                   │                  ╭ model.rs                                "
+"                   ╰ Architecture ────┤                                         "
+"                                      ╰ ui.rs                                   "
 "                                                                                "
 "                                                                                "
 "                                                                                "
