@@ -30,7 +30,10 @@
   "ignore": {
     "useGitignore": true,
     "useDefaultPatterns": true,
-    "customPatterns": []
+    "customPatterns": [
+      "tests/",
+      "docs/"
+    ]
   },
   "security": {
     "enableSecurityCheck": true
