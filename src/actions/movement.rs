@@ -108,33 +108,33 @@ pub fn go_up(app: &mut AppState) {
         let layout = LayoutEngine::calculate_layout(app);
 
         // First try to move to previous sibling based on position
-        if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1) {
-            if let Some(current_layout) = layout.nodes.get(&active_id) {
-                let current_y = current_layout.y + current_layout.yo;
+        if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1)
+            && let Some(current_layout) = layout.nodes.get(&active_id)
+        {
+            let current_y = current_layout.y + current_layout.yo;
 
-                // Find siblings that are above us
-                let mut best_sibling = None;
-                let mut best_y = -1.0;
+            // Find siblings that are above us
+            let mut best_sibling = None;
+            let mut best_y = -1.0;
 
-                for sibling_id in parent_id.children(&app.tree) {
-                    if sibling_id == active_id {
-                        continue;
-                    }
-
-                    if let Some(sibling_layout) = layout.nodes.get(&sibling_id) {
-                        let sibling_y = sibling_layout.y + sibling_layout.yo;
-                        if sibling_y < current_y && sibling_y > best_y {
-                            best_y = sibling_y;
-                            best_sibling = Some(sibling_id);
-                        }
-                    }
+            for sibling_id in parent_id.children(&app.tree) {
+                if sibling_id == active_id {
+                    continue;
                 }
 
-                if let Some(sibling) = best_sibling {
-                    app.active_node_id = Some(sibling);
-                    ensure_node_visible(app);
-                    return;
+                if let Some(sibling_layout) = layout.nodes.get(&sibling_id) {
+                    let sibling_y = sibling_layout.y + sibling_layout.yo;
+                    if sibling_y < current_y && sibling_y > best_y {
+                        best_y = sibling_y;
+                        best_sibling = Some(sibling_id);
+                    }
                 }
+            }
+
+            if let Some(sibling) = best_sibling {
+                app.active_node_id = Some(sibling);
+                ensure_node_visible(app);
+                return;
             }
         }
 
@@ -151,33 +151,33 @@ pub fn go_down(app: &mut AppState) {
         let layout = LayoutEngine::calculate_layout(app);
 
         // First try to move to next sibling based on position
-        if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1) {
-            if let Some(current_layout) = layout.nodes.get(&active_id) {
-                let current_y = current_layout.y + current_layout.yo;
+        if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1)
+            && let Some(current_layout) = layout.nodes.get(&active_id)
+        {
+            let current_y = current_layout.y + current_layout.yo;
 
-                // Find siblings that are below us
-                let mut best_sibling = None;
-                let mut best_y = f64::MAX;
+            // Find siblings that are below us
+            let mut best_sibling = None;
+            let mut best_y = f64::MAX;
 
-                for sibling_id in parent_id.children(&app.tree) {
-                    if sibling_id == active_id {
-                        continue;
-                    }
-
-                    if let Some(sibling_layout) = layout.nodes.get(&sibling_id) {
-                        let sibling_y = sibling_layout.y + sibling_layout.yo;
-                        if sibling_y > current_y && sibling_y < best_y {
-                            best_y = sibling_y;
-                            best_sibling = Some(sibling_id);
-                        }
-                    }
+            for sibling_id in parent_id.children(&app.tree) {
+                if sibling_id == active_id {
+                    continue;
                 }
 
-                if let Some(sibling) = best_sibling {
-                    app.active_node_id = Some(sibling);
-                    ensure_node_visible(app);
-                    return;
+                if let Some(sibling_layout) = layout.nodes.get(&sibling_id) {
+                    let sibling_y = sibling_layout.y + sibling_layout.yo;
+                    if sibling_y > current_y && sibling_y < best_y {
+                        best_y = sibling_y;
+                        best_sibling = Some(sibling_id);
+                    }
                 }
+            }
+
+            if let Some(sibling) = best_sibling {
+                app.active_node_id = Some(sibling);
+                ensure_node_visible(app);
+                return;
             }
         }
 
@@ -190,12 +190,12 @@ pub fn go_down(app: &mut AppState) {
 }
 
 pub fn go_left(app: &mut AppState) {
-    if let Some(active_id) = app.active_node_id {
-        if let Some(parent_id) = active_id.ancestors(&app.tree).nth(1) {
-            // Allow moving to parent even if it's the root
-            app.active_node_id = Some(parent_id);
-            ensure_node_visible(app);
-        }
+    if let Some(active_id) = app.active_node_id
+        && let Some(parent_id) = active_id.ancestors(&app.tree).nth(1)
+    {
+        // Allow moving to parent even if it's the root
+        app.active_node_id = Some(parent_id);
+        ensure_node_visible(app);
     }
 }
 

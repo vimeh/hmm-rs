@@ -338,12 +338,11 @@ mod tests {
         let mut app = create_test_app();
 
         // Collapse child2
-        if let Some(root_id) = app.root_id {
-            if let Some(child2_id) = root_id.children(&app.tree).nth(1) {
-                if let Some(node) = app.tree.get_mut(child2_id) {
-                    node.get_mut().is_collapsed = true;
-                }
-            }
+        if let Some(root_id) = app.root_id
+            && let Some(child2_id) = root_id.children(&app.tree).nth(1)
+            && let Some(node) = app.tree.get_mut(child2_id)
+        {
+            node.get_mut().is_collapsed = true;
         }
 
         let layout = LayoutEngine::calculate_layout(&app);
@@ -370,12 +369,11 @@ mod tests {
         let mut app = create_test_app();
 
         // Mark a child as hidden
-        if let Some(root_id) = app.root_id {
-            if let Some(child1_id) = root_id.children(&app.tree).next() {
-                if let Some(node) = app.tree.get_mut(child1_id) {
-                    node.get_mut().title = "[HIDDEN] Child 1".to_string();
-                }
-            }
+        if let Some(root_id) = app.root_id
+            && let Some(child1_id) = root_id.children(&app.tree).next()
+            && let Some(node) = app.tree.get_mut(child1_id)
+        {
+            node.get_mut().title = "[HIDDEN] Child 1".to_string();
         }
 
         // Hide hidden nodes

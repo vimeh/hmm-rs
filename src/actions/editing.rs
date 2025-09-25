@@ -23,35 +23,35 @@ pub fn type_char(app: &mut AppState, c: char) {
 }
 
 pub fn backspace(app: &mut AppState) {
-    if let AppMode::Editing { buffer, cursor_pos } = &mut app.mode {
-        if *cursor_pos > 0 {
-            *cursor_pos -= 1;
-            buffer.remove(*cursor_pos);
-        }
+    if let AppMode::Editing { buffer, cursor_pos } = &mut app.mode
+        && *cursor_pos > 0
+    {
+        *cursor_pos -= 1;
+        buffer.remove(*cursor_pos);
     }
 }
 
 pub fn delete_char(app: &mut AppState) {
-    if let AppMode::Editing { buffer, cursor_pos } = &mut app.mode {
-        if *cursor_pos < buffer.len() {
-            buffer.remove(*cursor_pos);
-        }
+    if let AppMode::Editing { buffer, cursor_pos } = &mut app.mode
+        && *cursor_pos < buffer.len()
+    {
+        buffer.remove(*cursor_pos);
     }
 }
 
 pub fn move_cursor_left(app: &mut AppState) {
-    if let AppMode::Editing { cursor_pos, .. } = &mut app.mode {
-        if *cursor_pos > 0 {
-            *cursor_pos -= 1;
-        }
+    if let AppMode::Editing { cursor_pos, .. } = &mut app.mode
+        && *cursor_pos > 0
+    {
+        *cursor_pos -= 1;
     }
 }
 
 pub fn move_cursor_right(app: &mut AppState) {
-    if let AppMode::Editing { buffer, cursor_pos } = &mut app.mode {
-        if *cursor_pos < buffer.len() {
-            *cursor_pos += 1;
-        }
+    if let AppMode::Editing { buffer, cursor_pos } = &mut app.mode
+        && *cursor_pos < buffer.len()
+    {
+        *cursor_pos += 1;
     }
 }
 
@@ -168,18 +168,18 @@ pub fn delete_to_start(app: &mut AppState) {
 pub fn paste_at_cursor(app: &mut AppState) {
     if let AppMode::Editing { buffer, cursor_pos } = &mut app.mode {
         // Try to get content from system clipboard
-        if let Ok(mut ctx) = ClipboardContext::new() {
-            if let Ok(content) = ctx.get_contents() {
-                // Clean the content: replace newlines and tabs with spaces
-                let cleaned = content
-                    .replace('\n', " ")
-                    .replace('\r', "")
-                    .replace('\t', "  ");
+        if let Ok(mut ctx) = ClipboardContext::new()
+            && let Ok(content) = ctx.get_contents()
+        {
+            // Clean the content: replace newlines and tabs with spaces
+            let cleaned = content
+                .replace('\n', " ")
+                .replace('\r', "")
+                .replace('\t', "  ");
 
-                // Insert at cursor position
-                buffer.insert_str(*cursor_pos, &cleaned);
-                *cursor_pos += cleaned.len();
-            }
+            // Insert at cursor position
+            buffer.insert_str(*cursor_pos, &cleaned);
+            *cursor_pos += cleaned.len();
         }
     }
 }

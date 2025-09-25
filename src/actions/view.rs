@@ -4,10 +4,10 @@ use crate::model::{Node, NodeId};
 use indextree::Arena;
 
 pub fn toggle_collapse(app: &mut AppState) {
-    if let Some(active_id) = app.active_node_id {
-        if let Some(node) = app.tree.get_mut(active_id) {
-            node.get_mut().is_collapsed = !node.get().is_collapsed;
-        }
+    if let Some(active_id) = app.active_node_id
+        && let Some(node) = app.tree.get_mut(active_id)
+    {
+        node.get_mut().is_collapsed = !node.get().is_collapsed;
     }
 }
 
@@ -136,10 +136,10 @@ fn collapse_siblings_recursive(tree: &mut Arena<Node>, node_id: NodeId) {
     // Collapse all siblings (children of parent except current node)
     let children: Vec<NodeId> = parent_id.children(tree).collect();
     for child_id in children {
-        if child_id != node_id {
-            if let Some(child_node) = tree.get_mut(child_id) {
-                child_node.get_mut().is_collapsed = true;
-            }
+        if child_id != node_id
+            && let Some(child_node) = tree.get_mut(child_id)
+        {
+            child_node.get_mut().is_collapsed = true;
         }
     }
 

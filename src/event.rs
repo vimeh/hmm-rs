@@ -5,10 +5,10 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use std::time::Duration;
 
 pub fn handle_events(app: &mut AppState) -> Result<Option<Action>> {
-    if event::poll(Duration::from_millis(10))? {
-        if let Event::Key(key) = event::read()? {
-            return Ok(handle_key_event(app, key));
-        }
+    if event::poll(Duration::from_millis(10))?
+        && let Event::Key(key) = event::read()?
+    {
+        return Ok(handle_key_event(app, key));
     }
     Ok(None)
 }

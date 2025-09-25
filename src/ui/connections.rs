@@ -110,13 +110,13 @@ impl<'a> ConnectionRenderer<'a> {
         let original_y = node_layout.y + node_layout.yo - self.app.viewport_top;
 
         // Check if this node should be sticky (same logic as in mindmap.rs)
-        if original_y + node_layout.lh <= 0.0 {
-            if let Some(node_ref) = self.app.tree.get(node_id) {
-                let node = node_ref.get();
-                if !node.is_collapsed && self.has_visible_children_in_viewport(node_id) {
-                    // Parent is sticky at top of viewport
-                    return self.app.viewport_top; // Return absolute position at viewport top
-                }
+        if original_y + node_layout.lh <= 0.0
+            && let Some(node_ref) = self.app.tree.get(node_id)
+        {
+            let node = node_ref.get();
+            if !node.is_collapsed && self.has_visible_children_in_viewport(node_id) {
+                // Parent is sticky at top of viewport
+                return self.app.viewport_top; // Return absolute position at viewport top
             }
         }
 
@@ -336,8 +336,8 @@ impl<'a> ConnectionRenderer<'a> {
                 .unwrap_or(0);
 
             // Check if there are children after the bottom visible one
-            for i in (bottom_index + 1)..all_siblings.len() {
-                if let Some(sibling_layout) = self.layout.nodes.get(&all_siblings[i]) {
+            for sibling in all_siblings.iter().skip(bottom_index + 1) {
+                if let Some(sibling_layout) = self.layout.nodes.get(sibling) {
                     let sibling_y = self.viewport_y(sibling_layout.y + sibling_layout.yo);
                     // If sibling is below viewport, we have hidden siblings
                     if sibling_y >= self.area.height as i32 {
@@ -373,14 +373,15 @@ impl<'a> ConnectionRenderer<'a> {
 
         // Draw middle connectors
         for &child_id in children {
-            if child_id != top_child && child_id != bottom_child {
-                if let Some(child_layout) = self.layout.nodes.get(&child_id) {
-                    let cy = (child_layout.y + child_layout.yo + child_layout.lh / 2.0
-                        - MIDDLE_CONNECTOR_Y_OFFSET) as i32;
-                    let py = self.viewport_y(cy as f64);
-                    if self.is_in_bounds(vert_x, py) {
-                        self.canvas.draw_text(vert_x as usize, py as usize, "├──");
-                    }
+            if child_id != top_child
+                && child_id != bottom_child
+                && let Some(child_layout) = self.layout.nodes.get(&child_id)
+            {
+                let cy = (child_layout.y + child_layout.yo + child_layout.lh / 2.0
+                    - MIDDLE_CONNECTOR_Y_OFFSET) as i32;
+                let py = self.viewport_y(cy as f64);
+                if self.is_in_bounds(vert_x, py) {
+                    self.canvas.draw_text(vert_x as usize, py as usize, "├──");
                 }
             }
         }

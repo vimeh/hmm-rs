@@ -33,5 +33,4 @@ pub mod junction {
     pub const MIDDLE_RIGHT: char = '┤';
     pub const CROSS: char = '┼';
     pub const TOP_TEE: char = '┬';
-    pub const BOTTOM_TEE: char = '┴';
 }

@@ -91,24 +91,24 @@ pub fn delete_children(app: &mut AppState) {
 }
 
 pub fn move_node_up(app: &mut AppState) {
-    if let Some(active_id) = app.active_node_id {
-        if let Some(prev_sibling) = active_id.preceding_siblings(&app.tree).nth(1) {
-            app.push_history();
-            prev_sibling.insert_before(active_id, &mut app.tree);
-            app.is_dirty = true;
-            app.last_modify_time = Some(std::time::Instant::now());
-        }
+    if let Some(active_id) = app.active_node_id
+        && let Some(prev_sibling) = active_id.preceding_siblings(&app.tree).nth(1)
+    {
+        app.push_history();
+        prev_sibling.insert_before(active_id, &mut app.tree);
+        app.is_dirty = true;
+        app.last_modify_time = Some(std::time::Instant::now());
     }
 }
 
 pub fn move_node_down(app: &mut AppState) {
-    if let Some(active_id) = app.active_node_id {
-        if let Some(next_sibling) = active_id.following_siblings(&app.tree).nth(1) {
-            app.push_history();
-            next_sibling.insert_after(active_id, &mut app.tree);
-            app.is_dirty = true;
-            app.last_modify_time = Some(std::time::Instant::now());
-        }
+    if let Some(active_id) = app.active_node_id
+        && let Some(next_sibling) = active_id.following_siblings(&app.tree).nth(1)
+    {
+        app.push_history();
+        next_sibling.insert_after(active_id, &mut app.tree);
+        app.is_dirty = true;
+        app.last_modify_time = Some(std::time::Instant::now());
     }
 }
 
