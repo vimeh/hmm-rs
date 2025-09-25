@@ -1,18 +1,16 @@
 use crate::app::AppState;
-use crate::layout::LayoutEngine;
 use crate::model::NodeId;
 use crate::ui::canvas::BufferCanvas;
-use crate::ui::constants::{
-    MIDDLE_CONNECTOR_Y_OFFSET, NODE_MIDDLE_Y_OFFSET, VERTICAL_CONNECTOR_OFFSET, connections,
-    junction,
-};
+use crate::ui::constants::{connections, junction};
+use crate::ui::view::ViewMap;
 use ratatui::layout::Rect;
+use std::cmp::{max, min};
 
-// Connection renderer
+/// Renders connections between nodes based on pre-calculated screen positions.
 pub struct ConnectionRenderer<'a> {
     canvas: &'a mut BufferCanvas,
     app: &'a AppState,
-    layout: &'a LayoutEngine,
+    view_map: &'a ViewMap,
     area: Rect,
 }
 
@@ -20,439 +18,167 @@ impl<'a> ConnectionRenderer<'a> {
     pub fn new(
         canvas: &'a mut BufferCanvas,
         app: &'a AppState,
-        layout: &'a LayoutEngine,
+        view_map: &'a ViewMap,
         area: Rect,
     ) -> Self {
         Self {
             canvas,
             app,
-            layout,
+            view_map,
             area,
         }
     }
 
-    pub fn draw_node_connections(&mut self, node_id: NodeId) {
-        let Some(node_ref) = self.app.tree.get(node_id) else {
-            return;
-        };
+    /// Recursively draw connections for a node and its visible children.
+    pub fn draw_connections_for_node(&mut self, node_id: NodeId) {
+        let Some(node_ref) = self.app.tree.get(node_id) else { return };
         let node = node_ref.get();
 
-        let Some(node_layout) = self.layout.nodes.get(&node_id) else {
-            return;
-        };
+        let Some(parent_view) = self.view_map.get(&node_id) else { return };
 
-        // Get children information
-        let all_children: Vec<NodeId> = node_id.children(&self.app.tree).collect();
-        let visible_children = self.get_visible_children(node_id);
+        let all_children: Vec<_> = node_id.children(&self.app.tree).collect();
+        let visible_children: Vec<_> = all_children
+            .iter()
+            .filter(|id| self.view_map.contains_key(id))
+            .cloned()
+            .collect();
+
         let has_hidden = all_children.len() != visible_children.len();
 
-        // Get adjusted Y position for sticky nodes
-        let adjusted_y = self.get_adjusted_node_y(node_id, node_layout);
-        let node_middle_y =
-            ((adjusted_y + node_layout.lh / 2.0 - NODE_MIDDLE_Y_OFFSET).round()) as i32;
+        let parent_exit_x = (parent_view.screen_rect.x + parent_view.screen_rect.width) as i32;
+        let parent_exit_y = parent_view.connection_y as i32;
 
-        // Handle different cases
+        // --- Simplified Drawing Logic ---
         if node.is_collapsed && !all_children.is_empty() {
-            self.draw_collapsed_indicator(node_layout, has_hidden);
-        } else if visible_children.is_empty() && !all_children.is_empty() {
-            self.draw_hidden_only_indicator(node_layout, node_middle_y);
-        } else if visible_children.len() == 1 {
-            self.draw_single_child_connection(
-                node_id,
-                node_layout,
-                node_middle_y,
-                visible_children[0],
-                has_hidden,
-            );
-        } else if visible_children.len() > 1 {
-            self.draw_multi_child_connections(
-                node_id,
-                node_layout,
-                node_middle_y,
-                &visible_children,
-                has_hidden,
-            );
+            self.draw_collapsed_indicator(parent_exit_x, parent_exit_y, has_hidden);
+        } else if !visible_children.is_empty() {
+            self.draw_child_connections(parent_exit_x, parent_exit_y, &visible_children, has_hidden);
+        } else if has_hidden { // Only hidden children
+            self.draw_hidden_only_indicator(parent_exit_x, parent_exit_y);
         }
 
-        // Recursively draw connections for visible children
-        // Only recurse if the node is not collapsed
+        // Recurse if the node is not collapsed
         if !node.is_collapsed {
             for child_id in visible_children {
-                self.draw_node_connections(child_id);
+                self.draw_connections_for_node(child_id);
             }
         }
     }
 
-    fn get_visible_children(&self, node_id: NodeId) -> Vec<NodeId> {
-        if !self.app.config.show_hidden {
-            node_id
-                .children(&self.app.tree)
-                .filter(|cid| {
-                    self.app
-                        .tree
-                        .get(*cid)
-                        .map(|n| !n.get().is_hidden())
-                        .unwrap_or(false)
-                })
-                .collect()
-        } else {
-            node_id.children(&self.app.tree).collect()
-        }
-    }
-
-    fn calculate_middle_y(&self, node_layout: &crate::layout::LayoutNode) -> i32 {
-        (node_layout.y + node_layout.yo + node_layout.lh / 2.0 - NODE_MIDDLE_Y_OFFSET).round()
-            as i32
-    }
-
-    /// Get the adjusted Y position for a node if it's sticky (parent with visible children above viewport)
-    fn get_adjusted_node_y(&self, node_id: NodeId, node_layout: &crate::layout::LayoutNode) -> f64 {
-        let original_y = node_layout.y + node_layout.yo - self.app.viewport_top;
-
-        // Check if this node should be sticky (same logic as in mindmap.rs)
-        if original_y + node_layout.lh <= 0.0
-            && let Some(node_ref) = self.app.tree.get(node_id)
-        {
-            let node = node_ref.get();
-            if !node.is_collapsed && self.has_visible_children_in_viewport(node_id) {
-                // Parent is sticky at top of viewport
-                // Return position that makes it stick at viewport top
-                // We need to return absolute Y that when converted to viewport will be 0
-                return self.app.viewport_top;
-            }
-        }
-
-        node_layout.y + node_layout.yo
-    }
-
-    /// Check if any children of a node are visible in the viewport (similar to mindmap.rs)
-    fn has_visible_children_in_viewport(&self, node_id: NodeId) -> bool {
-        let Some(node_ref) = self.app.tree.get(node_id) else {
-            return false;
-        };
-        let node = node_ref.get();
-
-        if node.is_collapsed {
-            return false;
-        }
-
-        let visible_children = self.get_visible_children(node_id);
-        for child_id in visible_children.iter() {
-            if let Some(child_layout) = self.layout.nodes.get(child_id) {
-                let child_y = self.viewport_y(child_layout.y + child_layout.yo);
-                let child_height = child_layout.lh as i32;
-
-                // Check if child is in viewport
-                if child_y + child_height > 0 && child_y < self.area.height as i32 {
-                    return true;
-                }
-
-                // Recursively check children
-                if self.has_visible_children_in_viewport(*child_id) {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    fn viewport_x(&self, x: f64) -> i32 {
-        (x - self.app.viewport_left) as i32
-    }
-
-    fn viewport_y(&self, y: f64) -> i32 {
-        (y - self.app.viewport_top) as i32
-    }
-
-    fn draw_collapsed_indicator(
+    fn draw_child_connections(
         &mut self,
-        node_layout: &crate::layout::LayoutNode,
-        has_hidden: bool,
-    ) {
-        let x = self.viewport_x(node_layout.x + node_layout.w + 1.0);
-        let y = self.viewport_y(node_layout.y + node_layout.yo);
-
-        if self.is_in_bounds(x, y) {
-            let text = if has_hidden {
-                connections::COLLAPSED_HIDDEN
-            } else {
-                connections::COLLAPSED
-            };
-            self.canvas.draw_text(x as usize, y as usize, text);
-        }
-    }
-
-    fn draw_hidden_only_indicator(
-        &mut self,
-        node_layout: &crate::layout::LayoutNode,
-        middle_y: i32,
-    ) {
-        let x = self.viewport_x(node_layout.x + node_layout.w + 1.0);
-        // middle_y is already absolute, convert to viewport
-        let y = middle_y - self.app.viewport_top as i32;
-
-        if self.is_in_bounds(x, y) {
-            self.canvas
-                .draw_text(x as usize, y as usize, connections::HIDDEN_ONLY);
-        }
-    }
-
-    fn draw_single_child_connection(
-        &mut self,
-        _parent_id: NodeId,
-        node_layout: &crate::layout::LayoutNode,
-        parent_middle_y: i32,
-        child_id: NodeId,
-        has_hidden: bool,
-    ) {
-        let Some(child_layout) = self.layout.nodes.get(&child_id) else {
-            return;
-        };
-
-        let child_middle_y = self.calculate_middle_y(child_layout);
-        let x = self.viewport_x(node_layout.x + node_layout.w + 1.0);
-
-        // Draw horizontal line
-        let line = if has_hidden {
-            connections::SINGLE_HIDDEN
-        } else {
-            connections::SINGLE
-        };
-
-        // Use the minimum of parent and child Y for horizontal line placement
-        let y = parent_middle_y.min(child_middle_y);
-        let py = y - self.app.viewport_top as i32;
-        if self.is_in_bounds(x, py) {
-            self.canvas.draw_text(x as usize, py as usize, line);
-        }
-
-        // Draw vertical connection if needed
-        if (parent_middle_y - child_middle_y).abs() > 0 {
-            self.draw_vertical_connection(child_layout, parent_middle_y, child_middle_y);
-        }
-    }
-
-    fn draw_multi_child_connections(
-        &mut self,
-        _parent_id: NodeId,
-        node_layout: &crate::layout::LayoutNode,
-        middle_y: i32,
+        parent_x: i32,
+        parent_y: i32,
         children: &[NodeId],
         has_hidden: bool,
     ) {
-        // Find top and bottom children
-        let (top_child, top_y, bottom_child, bottom_y) = self.find_extremes(children);
+        if children.len() == 1 {
+            // Single child - draw simple horizontal line
+            let child_view = self.view_map.get(&children[0]).unwrap();
+            let child_x = child_view.screen_rect.x as i32;
+            let child_y = child_view.connection_y as i32;
 
-        let Some(top_child_layout) = self.layout.nodes.get(&top_child) else {
-            return;
-        };
+            let connector = if has_hidden { connections::SINGLE_HIDDEN } else { connections::SINGLE };
+            self.draw_text(parent_x, parent_y.min(child_y), connector);
 
-        let x = self.viewport_x(node_layout.x + node_layout.w + 1.0);
+            // Draw vertical connection if needed
+            if (parent_y - child_y).abs() > 0 {
+                let spine_x = child_x - 2;
+                self.draw_vertical_line(spine_x, parent_y.min(child_y), parent_y.max(child_y), junction::VERTICAL);
 
-        // Draw horizontal line from parent
-        let line = if has_hidden {
-            connections::MULTI_HIDDEN
+                // Draw corners
+                let corner = if child_y > parent_y { junction::BOTTOM_CORNER } else { junction::TOP_CORNER };
+                self.canvas.set_char(spine_x as usize, child_y as usize, corner);
+
+                let top_corner = if child_y > parent_y { junction::TOP_CORNER } else { junction::BOTTOM_CORNER };
+                self.canvas.set_char(spine_x as usize, parent_y.min(child_y) as usize, top_corner);
+            }
         } else {
-            connections::MULTI
-        };
+            // Multiple children
+            let first_child_view = self.view_map.get(&children[0]).unwrap();
+            let last_child_view = self.view_map.get(children.last().unwrap()).unwrap();
 
-        // middle_y is already absolute, so convert to viewport coordinates
-        let py = middle_y - self.app.viewport_top as i32;
-        if self.is_in_bounds(x, py) {
-            self.canvas.draw_text(x as usize, py as usize, line);
-        }
+            // 1. Draw horizontal line from parent to the spine
+            let connector = if has_hidden { connections::MULTI_HIDDEN } else { connections::MULTI };
+            self.draw_text(parent_x, parent_y, " "); // Add space after parent text
+            self.draw_text(parent_x + 1, parent_y, connector); // Draw connector after the space
 
-        // Draw vertical spine
-        let vert_x = self.viewport_x(top_child_layout.x - VERTICAL_CONNECTOR_OFFSET);
-        self.draw_vertical_spine(vert_x, top_y, bottom_y);
+            let spine_x = parent_x + 1 + connector.chars().count() as i32; // Account for the space
+            let spine_start_y = first_child_view.connection_y as i32;
+            let spine_end_y = last_child_view.connection_y as i32;
 
-        // Draw child connectors
-        self.draw_child_connectors(vert_x, children, top_child, bottom_child);
+            // 2. Draw vertical spine
+            self.draw_vertical_line(spine_x, spine_start_y, spine_end_y, junction::VERTICAL);
 
-        // Fix junction at parent level
-        // middle_y is already absolute, so convert to viewport
-        let junction_y = (middle_y - self.app.viewport_top as i32) as i32;
-        self.fix_junction(vert_x, junction_y);
-    }
+            // 3. Draw junction from parent to spine
+            self.fix_junction(spine_x, parent_y, junction::MIDDLE_RIGHT);
 
-    fn draw_vertical_connection(
-        &mut self,
-        child_layout: &crate::layout::LayoutNode,
-        y1: i32,
-        y2: i32,
-    ) {
-        let vert_x = self.viewport_x(child_layout.x - VERTICAL_CONNECTOR_OFFSET);
+            // 4. Draw connectors from spine to each child
+            for (i, child_id) in children.iter().enumerate() {
+                let child_view = self.view_map.get(child_id).unwrap();
+                let child_y = child_view.connection_y as i32;
 
-        // Draw vertical line
-        for y in y1.min(y2)..y1.max(y2) {
-            let py = self.viewport_y(y as f64);
-            if self.is_in_bounds(vert_x, py) {
-                self.canvas
-                    .set_char(vert_x as usize, py as usize, junction::VERTICAL);
-            }
-        }
-
-        // Draw corners
-        let py2 = self.viewport_y(y2 as f64);
-        if self.is_in_bounds(vert_x, py2) {
-            let corner = if y2 > y1 {
-                junction::BOTTOM_CORNER
-            } else {
-                junction::TOP_CORNER
-            };
-            self.canvas.set_char(vert_x as usize, py2 as usize, corner);
-        }
-
-        let py_min = self.viewport_y(y1.min(y2) as f64);
-        if self.is_in_bounds(vert_x, py_min) {
-            let corner = if y2 > y1 {
-                junction::TOP_RIGHT
-            } else {
-                junction::BOTTOM_RIGHT
-            };
-            self.canvas
-                .set_char(vert_x as usize, py_min as usize, corner);
-        }
-    }
-
-    fn draw_vertical_spine(&mut self, x: i32, top_y: i32, bottom_y: i32) {
-        for y in top_y..bottom_y {
-            let py = self.viewport_y(y as f64);
-            if self.is_in_bounds(x, py) {
-                self.canvas
-                    .set_char(x as usize, py as usize, junction::VERTICAL);
-            }
-        }
-    }
-
-    fn draw_child_connectors(
-        &mut self,
-        vert_x: i32,
-        children: &[NodeId],
-        top_child: NodeId,
-        bottom_child: NodeId,
-    ) {
-        // Check if the bottom child is the last visible one but has siblings below the viewport
-        let mut has_siblings_below = false;
-        if let Some(parent_id) = self.app.tree.get(bottom_child).and_then(|n| n.parent()) {
-            let all_siblings: Vec<NodeId> = parent_id.children(&self.app.tree).collect();
-            let bottom_index = all_siblings
-                .iter()
-                .position(|&id| id == bottom_child)
-                .unwrap_or(0);
-
-            // Check if there are children after the bottom visible one
-            for sibling in all_siblings.iter().skip(bottom_index + 1) {
-                if let Some(sibling_layout) = self.layout.nodes.get(sibling) {
-                    let sibling_y = self.viewport_y(sibling_layout.y + sibling_layout.yo);
-                    // If sibling is below viewport, we have hidden siblings
-                    if sibling_y >= self.area.height as i32 {
-                        has_siblings_below = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Draw top corner - but check if it's actually the first child structurally
-        if let Some(top_layout) = self.layout.nodes.get(&top_child) {
-            // Check if this child is sticky
-            let adjusted_y = self.get_adjusted_node_y(top_child, top_layout);
-            let top_py = self.viewport_y(adjusted_y);
-            if self.is_in_bounds(vert_x, top_py) {
-                // Check if this is truly the first child in the tree structure
-                let is_first_child =
-                    if let Some(parent) = self.app.tree.get(top_child).and_then(|n| n.parent()) {
-                        parent.children(&self.app.tree).next() == Some(top_child)
-                    } else {
-                        true
-                    };
-
-                let connector = if is_first_child && top_py == 0 {
-                    // This is a sticky first child at the top
-                    "├──"
-                } else if is_first_child {
-                    "╭──"
-                } else if top_py == 0 {
-                    // This is a sticky non-first child
-                    "├──"
-                } else {
-                    "├──"
+                // Use junction constants
+                let junction_char = match i {
+                    0 => junction::TOP_CORNER,
+                    n if n == children.len() - 1 => junction::BOTTOM_CORNER,
+                    _ => junction::MIDDLE_LEFT,
                 };
-                self.canvas
-                    .draw_text(vert_x as usize, top_py as usize, connector);
+
+                // Draw junction character with explicit spacing
+                self.draw_text(spine_x, child_y, &junction_char.to_string());
+                self.draw_text(spine_x + 1, child_y, " ");
             }
         }
+    }
 
-        // Draw bottom corner or BOTTOM_TEE if there are siblings below
-        if let Some(bottom_layout) = self.layout.nodes.get(&bottom_child) {
-            let bot_py = self.viewport_y(bottom_layout.y + bottom_layout.yo);
-            if self.is_in_bounds(vert_x, bot_py) {
-                let bottom_char = if has_siblings_below {
-                    "┴──"
-                } else {
-                    "╰──"
-                };
-                self.canvas
-                    .draw_text(vert_x as usize, bot_py as usize, bottom_char);
-            }
-        }
+    fn draw_collapsed_indicator(&mut self, x: i32, y: i32, has_hidden: bool) {
+        let text = if has_hidden { connections::COLLAPSED_HIDDEN } else { connections::COLLAPSED };
+        self.draw_text(x, y, text);
+    }
 
-        // Draw middle connectors
-        for &child_id in children {
-            if child_id != top_child
-                && child_id != bottom_child
-                && let Some(child_layout) = self.layout.nodes.get(&child_id)
-            {
-                // Use adjusted Y for sticky nodes
-                let adjusted_y = self.get_adjusted_node_y(child_id, child_layout);
-                let cy = (adjusted_y + child_layout.lh / 2.0 - MIDDLE_CONNECTOR_Y_OFFSET) as i32;
-                let py = self.viewport_y(cy as f64);
-                if self.is_in_bounds(vert_x, py) {
-                    self.canvas.draw_text(vert_x as usize, py as usize, "├──");
+    fn draw_hidden_only_indicator(&mut self, x: i32, y: i32) {
+        self.draw_text(x, y, connections::HIDDEN_ONLY);
+    }
+
+    // --- Low-level, Idiomatic Drawing Primitives ---
+
+    fn draw_text(&mut self, x: i32, y: i32, text: &str) {
+        if y >= 0 && y < self.area.height as i32 {
+            for (i, ch) in text.chars().enumerate() {
+                let cx = x + i as i32;
+                if cx >= 0 && cx < self.area.width as i32 {
+                    self.canvas.set_char(cx as usize, y as usize, ch);
                 }
             }
         }
     }
 
-    fn fix_junction(&mut self, x: i32, y: i32) {
-        if !self.is_in_bounds(x, y) {
-            return;
-        }
-
-        let existing = self.canvas.char_buffer[y as usize][x as usize];
-        let replacement = match existing {
-            junction::VERTICAL => junction::MIDDLE_RIGHT,
-            junction::TOP_CORNER => junction::TOP_TEE,
-            junction::MIDDLE_LEFT => junction::CROSS,
-            _ => existing,
-        };
-        self.canvas.set_char(x as usize, y as usize, replacement);
-    }
-
-    fn find_extremes(&self, children: &[NodeId]) -> (NodeId, i32, NodeId, i32) {
-        let mut top_y = i32::MAX;
-        let mut bottom_y = i32::MIN;
-        let mut top_child = children[0];
-        let mut bottom_child = children[0];
-
-        for &child_id in children {
-            if let Some(child_layout) = self.layout.nodes.get(&child_id) {
-                // Use adjusted Y for sticky nodes
-                let adjusted_y = self.get_adjusted_node_y(child_id, child_layout);
-                let child_y = adjusted_y as i32;
-                if child_y < top_y {
-                    top_y = child_y;
-                    top_child = child_id;
-                }
-                if child_y > bottom_y {
-                    bottom_y = child_y;
-                    bottom_child = child_id;
+    fn draw_horizontal_line(&mut self, x1: i32, x2: i32, y: i32, ch: char) {
+        if y >= 0 && y < self.area.height as i32 {
+            for x in min(x1, x2)..=max(x1, x2) {
+                if x >= 0 && x < self.area.width as i32 {
+                    self.canvas.set_char(x as usize, y as usize, ch);
                 }
             }
         }
+    }
 
-        (top_child, top_y, bottom_child, bottom_y)
+    fn draw_vertical_line(&mut self, x: i32, y1: i32, y2: i32, ch: char) {
+        if x >= 0 && x < self.area.width as i32 {
+            for y in min(y1, y2)..=max(y1, y2) {
+                if y >= 0 && y < self.area.height as i32 {
+                    self.canvas.set_char(x as usize, y as usize, ch);
+                }
+            }
+        }
+    }
+
+    /// Overwrites a character at a junction point, for example turning a '|' into a '├'.
+    fn fix_junction(&mut self, x: i32, y: i32, ch: char) {
+        if self.is_in_bounds(x, y) {
+             self.canvas.set_char(x as usize, y as usize, ch);
+        }
     }
 
     fn is_in_bounds(&self, x: i32, y: i32) -> bool {

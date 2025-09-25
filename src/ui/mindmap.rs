@@ -4,6 +4,7 @@ use crate::model::NodeId;
 use crate::ui::canvas::BufferCanvas;
 use crate::ui::connections::ConnectionRenderer;
 use crate::ui::text::TextWrapper;
+use crate::ui::view::ViewMap;
 use ratatui::{
     Frame,
     layout::Rect,
@@ -15,26 +16,25 @@ use ratatui::{
 pub struct MindMapRenderer<'a> {
     app: &'a AppState,
     layout: &'a LayoutEngine,
+    view_map: &'a ViewMap,
 }
 
 impl<'a> MindMapRenderer<'a> {
-    pub fn new(app: &'a AppState, layout: &'a LayoutEngine) -> Self {
-        Self { app, layout }
+    pub fn new(app: &'a AppState, layout: &'a LayoutEngine, view_map: &'a ViewMap) -> Self {
+        Self { app, layout, view_map }
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect) {
         let mut canvas = BufferCanvas::new(area.width as usize, area.height as usize);
 
-        // Draw connections first (behind nodes)
         if let Some(root_id) = self.app.root_id {
+            // Draw connections first
             let mut conn_renderer =
-                ConnectionRenderer::new(&mut canvas, self.app, self.layout, area);
-            conn_renderer.draw_node_connections(root_id);
-        }
+                ConnectionRenderer::new(&mut canvas, self.app, self.view_map, area);
+            conn_renderer.draw_connections_for_node(root_id);
 
-        // Draw nodes on top
-        if let Some(root_id) = self.app.root_id {
-            self.draw_node_content(&mut canvas, root_id, area);
+            // Draw nodes on top
+            self.draw_all_nodes(&mut canvas);
         }
 
         // Convert buffer to paragraph and render
@@ -43,84 +43,21 @@ impl<'a> MindMapRenderer<'a> {
         frame.render_widget(paragraph, area);
     }
 
-    fn draw_node_content(&self, canvas: &mut BufferCanvas, node_id: NodeId, area: Rect) {
-        let Some(node_ref) = self.app.tree.get(node_id) else {
-            return;
-        };
-        let node = node_ref.get();
+    // The recursive draw function is replaced with a simple iteration
+    fn draw_all_nodes(&self, canvas: &mut BufferCanvas) {
+        // Iterate over the pre-calculated visible nodes
+        for (node_id, view_node) in self.view_map {
+            let Some(node_ref) = self.app.tree.get(*node_id) else { continue };
+            let node = node_ref.get();
+            let style = self.get_node_style(*node_id, node);
 
-        let Some(node_layout) = self.layout.nodes.get(&node_id) else {
-            return;
-        };
+            let x = view_node.screen_rect.x as usize;
+            let y = view_node.screen_rect.y as usize;
+            let width = view_node.screen_rect.width as usize;
 
-        // Calculate viewport coordinates as signed integers
-        let x = (node_layout.x - self.app.viewport_left) as i32;
-        let original_y = (node_layout.y + node_layout.yo - self.app.viewport_top) as i32;
-
-        // Adjust Y position for parent nodes with visible children
-        let y = self.get_adjusted_parent_y(node_id, original_y, area);
-
-        // Determine node style
-        let style = self.get_node_style(node_id, node);
-
-        // Skip drawing if the node AND its children are completely off-screen
-        let node_height = TextWrapper::wrap(&node.title, node_layout.w as usize).len() as i32;
-        let is_node_visible = y + node_height > 0 && y < area.height as i32;
-        let has_visible_children =
-            !node.is_collapsed && self.has_visible_children_in_viewport(node_id, area);
-
-        // Check if node is within viewport bounds
-        // Skip only if node is off-screen to the right, or if both node and children are invisible
-        if x >= area.width as i32 {
-            // Node is completely off-screen to the right
-            return;
-        } else if !is_node_visible && !has_visible_children {
-            // Node and its children are completely off-screen
-            return;
-        } else if x >= 0 && y >= 0 && y < area.height as i32 {
-            // Node is at least partially visible
-            let lines = TextWrapper::wrap(&node.title, node_layout.w as usize);
-            let num_lines = lines.len() as i32;
-
-            // Only draw if at least part of the node is visible
-            if y + num_lines > 0 {
-                for (i, line) in lines.iter().enumerate() {
-                    let line_y = y + i as i32;
-                    // Only draw lines that are within the viewport
-                    if line_y >= 0 && line_y < area.height as i32 {
-                        canvas.draw_styled_text(x as usize, line_y as usize, line, style);
-                    }
-                }
-            }
-        }
-        // If x < 0, the node starts off-screen from the left but might be partially visible
-        else if x < 0 && x + node_layout.w as i32 > 0 && y >= 0 && y < area.height as i32 {
-            // Node is partially visible from the left
-            let lines = TextWrapper::wrap(&node.title, node_layout.w as usize);
+            let lines = TextWrapper::wrap(&node.title, width);
             for (i, line) in lines.iter().enumerate() {
-                let line_y = y + i as i32;
-                if line_y >= 0 && line_y < area.height as i32 {
-                    // Calculate how many characters to skip
-                    let skip_count = (-x) as usize;
-                    // Use character-based skipping, not byte-based
-                    let visible_part: String = line.chars().skip(skip_count).collect();
-                    if !visible_part.is_empty() {
-                        // The visible width is the total width minus what we skipped
-                        let visible_width =
-                            (node_layout.w as i32 + x).max(visible_part.len() as i32) as usize;
-                        // Pad the visible part to ensure it overwrites any connections
-                        let padded = format!("{:<width$}", visible_part, width = visible_width);
-                        canvas.draw_styled_text(0, line_y as usize, &padded, style);
-                    }
-                }
-            }
-        }
-
-        // Draw children if not collapsed
-        if !node.is_collapsed {
-            let children = self.get_visible_children(node_id);
-            for child_id in children {
-                self.draw_node_content(canvas, child_id, area);
+                canvas.draw_styled_text(x, y + i, line, style);
             }
         }
     }
@@ -140,84 +77,5 @@ impl<'a> MindMapRenderer<'a> {
         } else {
             Style::default()
         }
-    }
-
-    fn get_visible_children(&self, node_id: NodeId) -> Vec<NodeId> {
-        if !self.app.config.show_hidden {
-            node_id
-                .children(&self.app.tree)
-                .filter(|cid| {
-                    self.app
-                        .tree
-                        .get(*cid)
-                        .map(|n| !n.get().is_hidden())
-                        .unwrap_or(false)
-                })
-                .collect()
-        } else {
-            node_id.children(&self.app.tree).collect()
-        }
-    }
-
-    /// Check if any children of a node are visible in the viewport
-    fn has_visible_children_in_viewport(&self, node_id: NodeId, area: Rect) -> bool {
-        let Some(node_ref) = self.app.tree.get(node_id) else {
-            return false;
-        };
-        let node = node_ref.get();
-
-        if node.is_collapsed {
-            return false;
-        }
-
-        let children = self.get_visible_children(node_id);
-        for child_id in children {
-            if self.is_node_in_viewport(child_id, area) {
-                return true;
-            }
-            // Recursively check children's children
-            if self.has_visible_children_in_viewport(child_id, area) {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Check if a node is at least partially visible in the viewport
-    fn is_node_in_viewport(&self, node_id: NodeId, area: Rect) -> bool {
-        let Some(node_layout) = self.layout.nodes.get(&node_id) else {
-            return false;
-        };
-
-        let y = (node_layout.y + node_layout.yo - self.app.viewport_top) as i32;
-        let node_height = node_layout.lh as i32;
-
-        // Check if node is vertically within viewport
-        y + node_height > 0 && y < area.height as i32
-    }
-
-    /// Get the adjusted Y position for a parent node based on its visible children
-    fn get_adjusted_parent_y(&self, node_id: NodeId, original_y: i32, area: Rect) -> i32 {
-        let Some(node_layout) = self.layout.nodes.get(&node_id) else {
-            return original_y;
-        };
-
-        let node_height = node_layout.lh as i32;
-
-        // If the parent node is above the viewport but has visible children,
-        // keep it visible at the top of the viewport
-        if original_y + node_height <= 0 {
-            let Some(node_ref) = self.app.tree.get(node_id) else {
-                return original_y;
-            };
-            let node = node_ref.get();
-
-            if !node.is_collapsed && self.has_visible_children_in_viewport(node_id, area) {
-                // Keep the parent at the top of the viewport
-                // Position it at y=0 so it stays visible
-                return 0;
-            }
-        }
-        original_y
     }
 }
