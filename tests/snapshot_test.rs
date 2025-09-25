@@ -3,7 +3,7 @@ use hmm_rs::config::AppConfig;
 use hmm_rs::model::Node;
 use hmm_rs::ui;
 use insta::assert_snapshot;
-use ratatui::{backend::TestBackend, Terminal};
+use ratatui::{Terminal, backend::TestBackend};
 
 fn create_test_app_with_tree() -> AppState {
     let config = AppConfig::default();
@@ -418,7 +418,10 @@ fn test_render_with_vertical_scroll_nodes_disappear() {
     let output = terminal.backend().to_string();
 
     // The root node should be completely gone (not stuck at top)
-    assert!(!output.contains("Mind Map Root"), "Root node should not be visible when scrolled past");
+    assert!(
+        !output.contains("Mind Map Root"),
+        "Root node should not be visible when scrolled past"
+    );
 
     // But the architecture nodes should be visible
     // Actually, with viewport_top = 10, nothing might be visible

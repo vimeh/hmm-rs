@@ -110,22 +110,24 @@ mod tests {
         let root = app.root_id.unwrap();
 
         toggle_hide(&mut app);
-        assert!(app
-            .tree
-            .get(root)
-            .unwrap()
-            .get()
-            .title
-            .starts_with("[HIDDEN] "));
+        assert!(
+            app.tree
+                .get(root)
+                .unwrap()
+                .get()
+                .title
+                .starts_with("[HIDDEN] ")
+        );
 
         toggle_hide(&mut app);
-        assert!(!app
-            .tree
-            .get(root)
-            .unwrap()
-            .get()
-            .title
-            .starts_with("[HIDDEN] "));
+        assert!(
+            !app.tree
+                .get(root)
+                .unwrap()
+                .get()
+                .title
+                .starts_with("[HIDDEN] ")
+        );
     }
 
     #[test]

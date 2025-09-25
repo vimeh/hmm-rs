@@ -14,8 +14,8 @@ use crate::layout::LayoutEngine;
 use help::HelpRenderer;
 use mindmap::MindMapRenderer;
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
     Frame,
+    layout::{Constraint, Direction, Layout},
 };
 use status_line::StatusLineRenderer;
 

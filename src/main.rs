@@ -3,13 +3,13 @@ use hmm_rs::{actions, app, config, event, model, parser, ui};
 use anyhow::Result;
 use app::AppState;
 use clap::Parser;
-use config::{load_config, CliArgs};
+use config::{CliArgs, load_config};
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
 use std::time::{Duration, Instant};
 

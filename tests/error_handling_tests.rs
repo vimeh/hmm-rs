@@ -1,4 +1,4 @@
-use hmm_rs::{parser, AppConfig, AppState};
+use hmm_rs::{AppConfig, AppState, parser};
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;

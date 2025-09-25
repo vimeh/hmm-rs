@@ -3,8 +3,8 @@ use crate::layout::LayoutEngine;
 use crate::model::NodeId;
 use crate::ui::canvas::BufferCanvas;
 use crate::ui::constants::{
-    connections, junction, MIDDLE_CONNECTOR_Y_OFFSET, NODE_MIDDLE_Y_OFFSET,
-    VERTICAL_CONNECTOR_OFFSET,
+    MIDDLE_CONNECTOR_Y_OFFSET, NODE_MIDDLE_Y_OFFSET, VERTICAL_CONNECTOR_OFFSET, connections,
+    junction,
 };
 use ratatui::layout::Rect;
 
@@ -48,7 +48,8 @@ impl<'a> ConnectionRenderer<'a> {
 
         // Get adjusted Y position for sticky nodes
         let adjusted_y = self.get_adjusted_node_y(node_id, node_layout);
-        let node_middle_y = ((adjusted_y + node_layout.lh / 2.0 - NODE_MIDDLE_Y_OFFSET).round()) as i32;
+        let node_middle_y =
+            ((adjusted_y + node_layout.lh / 2.0 - NODE_MIDDLE_Y_OFFSET).round()) as i32;
 
         // Handle different cases
         if node.is_collapsed && !all_children.is_empty() {
@@ -329,7 +330,10 @@ impl<'a> ConnectionRenderer<'a> {
         let mut has_siblings_below = false;
         if let Some(parent_id) = self.app.tree.get(bottom_child).and_then(|n| n.parent()) {
             let all_siblings: Vec<NodeId> = parent_id.children(&self.app.tree).collect();
-            let bottom_index = all_siblings.iter().position(|&id| id == bottom_child).unwrap_or(0);
+            let bottom_index = all_siblings
+                .iter()
+                .position(|&id| id == bottom_child)
+                .unwrap_or(0);
 
             // Check if there are children after the bottom visible one
             for i in (bottom_index + 1)..all_siblings.len() {
@@ -357,7 +361,11 @@ impl<'a> ConnectionRenderer<'a> {
         if let Some(bottom_layout) = self.layout.nodes.get(&bottom_child) {
             let bot_py = self.viewport_y(bottom_layout.y + bottom_layout.yo);
             if self.is_in_bounds(vert_x, bot_py) {
-                let bottom_char = if has_siblings_below { "┴──" } else { "╰──" };
+                let bottom_char = if has_siblings_below {
+                    "┴──"
+                } else {
+                    "╰──"
+                };
                 self.canvas
                     .draw_text(vert_x as usize, bot_py as usize, bottom_char);
             }

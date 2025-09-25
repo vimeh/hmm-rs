@@ -5,10 +5,10 @@ use crate::ui::canvas::BufferCanvas;
 use crate::ui::connections::ConnectionRenderer;
 use crate::ui::text::TextWrapper;
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     widgets::Paragraph,
-    Frame,
 };
 
 // Mind map renderer
@@ -66,7 +66,8 @@ impl<'a> MindMapRenderer<'a> {
         // Skip drawing if the node AND its children are completely off-screen
         let node_height = TextWrapper::wrap(&node.title, node_layout.w as usize).len() as i32;
         let is_node_visible = y + node_height > 0 && y < area.height as i32;
-        let has_visible_children = !node.is_collapsed && self.has_visible_children_in_viewport(node_id, area);
+        let has_visible_children =
+            !node.is_collapsed && self.has_visible_children_in_viewport(node_id, area);
 
         // Check if node is within viewport bounds
         // Skip only if node is off-screen to the right, or if both node and children are invisible
@@ -105,7 +106,8 @@ impl<'a> MindMapRenderer<'a> {
                     let visible_part: String = line.chars().skip(skip_count).collect();
                     if !visible_part.is_empty() {
                         // The visible width is the total width minus what we skipped
-                        let visible_width = (node_layout.w as i32 + x).max(visible_part.len() as i32) as usize;
+                        let visible_width =
+                            (node_layout.w as i32 + x).max(visible_part.len() as i32) as usize;
                         // Pad the visible part to ensure it overwrites any connections
                         let padded = format!("{:<width$}", visible_part, width = visible_width);
                         canvas.draw_styled_text(0, line_y as usize, &padded, style);

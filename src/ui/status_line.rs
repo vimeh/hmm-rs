@@ -1,10 +1,10 @@
 use crate::app::{AppMode, AppState};
 use crate::ui::constants::{CURSOR_INDICATOR, STATUS_EDIT_PREFIX, STATUS_SEARCH_PREFIX};
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     widgets::{Paragraph, Wrap},
-    Frame,
 };
 
 // Status line renderer

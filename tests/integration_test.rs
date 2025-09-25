@@ -1,4 +1,4 @@
-use hmm_rs::{parser, AppConfig, AppState, Node, NodeId};
+use hmm_rs::{AppConfig, AppState, Node, NodeId, parser};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;

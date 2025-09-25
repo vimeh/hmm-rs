@@ -1,4 +1,4 @@
-use hmm_rs::{model::Node, NodeId};
+use hmm_rs::{NodeId, model::Node};
 use indextree::Arena;
 use std::collections::HashSet;
 
