@@ -116,7 +116,9 @@ impl<'a> ConnectionRenderer<'a> {
             let node = node_ref.get();
             if !node.is_collapsed && self.has_visible_children_in_viewport(node_id) {
                 // Parent is sticky at top of viewport
-                return self.app.viewport_top; // Return absolute position at viewport top
+                // Return position that makes it stick at viewport top
+                // We need to return absolute Y that when converted to viewport will be 0
+                return self.app.viewport_top;
             }
         }
 
@@ -186,7 +188,8 @@ impl<'a> ConnectionRenderer<'a> {
         middle_y: i32,
     ) {
         let x = self.viewport_x(node_layout.x + node_layout.w + 1.0);
-        let y = self.viewport_y(middle_y as f64);
+        // middle_y is already absolute, convert to viewport
+        let y = middle_y - self.app.viewport_top as i32;
 
         if self.is_in_bounds(x, y) {
             self.canvas
@@ -218,9 +221,10 @@ impl<'a> ConnectionRenderer<'a> {
 
         // Use the minimum of parent and child Y for horizontal line placement
         let y = parent_middle_y.min(child_middle_y);
-        if self.is_in_bounds(x, self.viewport_y(y as f64)) {
+        let py = y - self.app.viewport_top as i32;
+        if self.is_in_bounds(x, py) {
             self.canvas
-                .draw_text(x as usize, self.viewport_y(y as f64) as usize, line);
+                .draw_text(x as usize, py as usize, line);
         }
 
         // Draw vertical connection if needed
@@ -253,7 +257,8 @@ impl<'a> ConnectionRenderer<'a> {
             connections::MULTI
         };
 
-        let py = self.viewport_y(middle_y as f64);
+        // middle_y is already absolute, so convert to viewport coordinates
+        let py = middle_y - self.app.viewport_top as i32;
         if self.is_in_bounds(x, py) {
             self.canvas.draw_text(x as usize, py as usize, line);
         }
@@ -266,7 +271,9 @@ impl<'a> ConnectionRenderer<'a> {
         self.draw_child_connectors(vert_x, children, top_child, bottom_child);
 
         // Fix junction at parent level
-        self.fix_junction(vert_x, self.viewport_y(middle_y as f64));
+        // middle_y is already absolute, so convert to viewport
+        let junction_y = (middle_y - self.app.viewport_top as i32) as i32;
+        self.fix_junction(vert_x, junction_y);
     }
 
     fn draw_vertical_connection(
@@ -348,12 +355,31 @@ impl<'a> ConnectionRenderer<'a> {
             }
         }
 
-        // Draw top corner
+        // Draw top corner - but check if it's actually the first child structurally
         if let Some(top_layout) = self.layout.nodes.get(&top_child) {
-            let top_py = self.viewport_y(top_layout.y + top_layout.yo);
+            // Check if this child is sticky
+            let adjusted_y = self.get_adjusted_node_y(top_child, top_layout);
+            let top_py = self.viewport_y(adjusted_y);
             if self.is_in_bounds(vert_x, top_py) {
-                self.canvas
-                    .draw_text(vert_x as usize, top_py as usize, "╭──");
+                // Check if this is truly the first child in the tree structure
+                let is_first_child = if let Some(parent) = self.app.tree.get(top_child).and_then(|n| n.parent()) {
+                    parent.children(&self.app.tree).next() == Some(top_child)
+                } else {
+                    true
+                };
+
+                let connector = if is_first_child && top_py == 0 {
+                    // This is a sticky first child at the top
+                    "├──"
+                } else if is_first_child {
+                    "╭──"
+                } else if top_py == 0 {
+                    // This is a sticky non-first child
+                    "├──"
+                } else {
+                    "├──"
+                };
+                self.canvas.draw_text(vert_x as usize, top_py as usize, connector);
             }
         }
 
@@ -377,8 +403,9 @@ impl<'a> ConnectionRenderer<'a> {
                 && child_id != bottom_child
                 && let Some(child_layout) = self.layout.nodes.get(&child_id)
             {
-                let cy = (child_layout.y + child_layout.yo + child_layout.lh / 2.0
-                    - MIDDLE_CONNECTOR_Y_OFFSET) as i32;
+                // Use adjusted Y for sticky nodes
+                let adjusted_y = self.get_adjusted_node_y(child_id, child_layout);
+                let cy = (adjusted_y + child_layout.lh / 2.0 - MIDDLE_CONNECTOR_Y_OFFSET) as i32;
                 let py = self.viewport_y(cy as f64);
                 if self.is_in_bounds(vert_x, py) {
                     self.canvas.draw_text(vert_x as usize, py as usize, "├──");
@@ -410,7 +437,9 @@ impl<'a> ConnectionRenderer<'a> {
 
         for &child_id in children {
             if let Some(child_layout) = self.layout.nodes.get(&child_id) {
-                let child_y = (child_layout.y + child_layout.yo) as i32;
+                // Use adjusted Y for sticky nodes
+                let adjusted_y = self.get_adjusted_node_y(child_id, child_layout);
+                let child_y = adjusted_y as i32;
                 if child_y < top_y {
                     top_y = child_y;
                     top_child = child_id;
