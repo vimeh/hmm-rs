@@ -69,11 +69,14 @@ impl<'a> MindMapRenderer<'a> {
         let has_visible_children = !node.is_collapsed && self.has_visible_children_in_viewport(node_id, area);
 
         // Check if node is within viewport bounds
-        // Skip nodes that are completely above or to the left of viewport
-        if x >= area.width as i32 || (!is_node_visible && !has_visible_children) {
+        // Skip only if node is off-screen to the right, or if both node and children are invisible
+        if x >= area.width as i32 {
+            // Node is completely off-screen to the right
+            return;
+        } else if !is_node_visible && !has_visible_children {
             // Node and its children are completely off-screen
-            return; // No need to process children if parent and all children are off-screen
-        } else if x >= 0 && y >= 0 && is_node_visible {
+            return;
+        } else if x >= 0 && y >= 0 && y < area.height as i32 {
             // Node is at least partially visible
             let lines = TextWrapper::wrap(&node.title, node_layout.w as usize);
             let num_lines = lines.len() as i32;
@@ -199,12 +202,9 @@ impl<'a> MindMapRenderer<'a> {
 
         let node_height = node_layout.lh as i32;
 
-        // Only preserve parent visibility if it's JUST scrolling off the top
-        // and has visible children. If it's far above (more than its height),
-        // let it disappear completely.
-        let threshold = node_height * 2; // Only preserve if within 2x height of viewport top
-
-        if original_y < 0 && original_y > -threshold && original_y + node_height <= 0 {
+        // If the parent node is above the viewport but has visible children,
+        // keep it visible at the top of the viewport
+        if original_y + node_height <= 0 {
             let Some(node_ref) = self.app.tree.get(node_id) else {
                 return original_y;
             };
@@ -212,8 +212,8 @@ impl<'a> MindMapRenderer<'a> {
 
             if !node.is_collapsed && self.has_visible_children_in_viewport(node_id, area) {
                 // Keep the parent at the top of the viewport
-                // Position it so its bottom line is just visible
-                return 1 - node_height;
+                // Position it at y=0 so it stays visible
+                return 0;
             }
         }
         original_y
