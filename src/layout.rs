@@ -489,15 +489,17 @@ mod tests {
         let spacing1 = child_layout.x - (root_layout.x + root_layout.w);
         let spacing2 = grandchild_layout.x - (child_layout.x + child_layout.w);
 
+        // Single-child chains now have extra spacing (7 instead of 6)
+        let expected_spacing = 7.0;
         assert_eq!(
-            spacing1, NODE_CONNECTION_SPACING,
+            spacing1, expected_spacing,
             "Spacing between root and child should be {} units",
-            NODE_CONNECTION_SPACING
+            expected_spacing
         );
         assert_eq!(
-            spacing2, NODE_CONNECTION_SPACING,
+            spacing2, expected_spacing,
             "Spacing between child and grandchild should be {} units",
-            NODE_CONNECTION_SPACING
+            expected_spacing
         );
     }
 
