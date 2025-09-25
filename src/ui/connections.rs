@@ -46,8 +46,9 @@ impl<'a> ConnectionRenderer<'a> {
         let visible_children = self.get_visible_children(node_id);
         let has_hidden = all_children.len() != visible_children.len();
 
-        // Calculate node middle Y position
-        let node_middle_y = self.calculate_middle_y(node_layout);
+        // Get adjusted Y position for sticky nodes
+        let adjusted_y = self.get_adjusted_node_y(node_id, node_layout);
+        let node_middle_y = ((adjusted_y + node_layout.lh / 2.0 - NODE_MIDDLE_Y_OFFSET).round()) as i32;
 
         // Handle different cases
         if node.is_collapsed && !all_children.is_empty() {
@@ -56,6 +57,7 @@ impl<'a> ConnectionRenderer<'a> {
             self.draw_hidden_only_indicator(node_layout, node_middle_y);
         } else if visible_children.len() == 1 {
             self.draw_single_child_connection(
+                node_id,
                 node_layout,
                 node_middle_y,
                 visible_children[0],
@@ -63,6 +65,7 @@ impl<'a> ConnectionRenderer<'a> {
             );
         } else if visible_children.len() > 1 {
             self.draw_multi_child_connections(
+                node_id,
                 node_layout,
                 node_middle_y,
                 &visible_children,
@@ -99,6 +102,55 @@ impl<'a> ConnectionRenderer<'a> {
     fn calculate_middle_y(&self, node_layout: &crate::layout::LayoutNode) -> i32 {
         (node_layout.y + node_layout.yo + node_layout.lh / 2.0 - NODE_MIDDLE_Y_OFFSET).round()
             as i32
+    }
+
+    /// Get the adjusted Y position for a node if it's sticky (parent with visible children above viewport)
+    fn get_adjusted_node_y(&self, node_id: NodeId, node_layout: &crate::layout::LayoutNode) -> f64 {
+        let original_y = node_layout.y + node_layout.yo - self.app.viewport_top;
+
+        // Check if this node should be sticky (same logic as in mindmap.rs)
+        if original_y + node_layout.lh <= 0.0 {
+            if let Some(node_ref) = self.app.tree.get(node_id) {
+                let node = node_ref.get();
+                if !node.is_collapsed && self.has_visible_children_in_viewport(node_id) {
+                    // Parent is sticky at top of viewport
+                    return self.app.viewport_top; // Return absolute position at viewport top
+                }
+            }
+        }
+
+        node_layout.y + node_layout.yo
+    }
+
+    /// Check if any children of a node are visible in the viewport (similar to mindmap.rs)
+    fn has_visible_children_in_viewport(&self, node_id: NodeId) -> bool {
+        let Some(node_ref) = self.app.tree.get(node_id) else {
+            return false;
+        };
+        let node = node_ref.get();
+
+        if node.is_collapsed {
+            return false;
+        }
+
+        let visible_children = self.get_visible_children(node_id);
+        for child_id in visible_children.iter() {
+            if let Some(child_layout) = self.layout.nodes.get(child_id) {
+                let child_y = self.viewport_y(child_layout.y + child_layout.yo);
+                let child_height = child_layout.lh as i32;
+
+                // Check if child is in viewport
+                if child_y + child_height > 0 && child_y < self.area.height as i32 {
+                    return true;
+                }
+
+                // Recursively check children
+                if self.has_visible_children_in_viewport(*child_id) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn viewport_x(&self, x: f64) -> i32 {
@@ -143,6 +195,7 @@ impl<'a> ConnectionRenderer<'a> {
 
     fn draw_single_child_connection(
         &mut self,
+        _parent_id: NodeId,
         node_layout: &crate::layout::LayoutNode,
         parent_middle_y: i32,
         child_id: NodeId,
@@ -162,6 +215,7 @@ impl<'a> ConnectionRenderer<'a> {
             connections::SINGLE
         };
 
+        // Use the minimum of parent and child Y for horizontal line placement
         let y = parent_middle_y.min(child_middle_y);
         if self.is_in_bounds(x, self.viewport_y(y as f64)) {
             self.canvas
@@ -176,6 +230,7 @@ impl<'a> ConnectionRenderer<'a> {
 
     fn draw_multi_child_connections(
         &mut self,
+        _parent_id: NodeId,
         node_layout: &crate::layout::LayoutNode,
         middle_y: i32,
         children: &[NodeId],
@@ -270,6 +325,25 @@ impl<'a> ConnectionRenderer<'a> {
         top_child: NodeId,
         bottom_child: NodeId,
     ) {
+        // Check if the bottom child is the last visible one but has siblings below the viewport
+        let mut has_siblings_below = false;
+        if let Some(parent_id) = self.app.tree.get(bottom_child).and_then(|n| n.parent()) {
+            let all_siblings: Vec<NodeId> = parent_id.children(&self.app.tree).collect();
+            let bottom_index = all_siblings.iter().position(|&id| id == bottom_child).unwrap_or(0);
+
+            // Check if there are children after the bottom visible one
+            for i in (bottom_index + 1)..all_siblings.len() {
+                if let Some(sibling_layout) = self.layout.nodes.get(&all_siblings[i]) {
+                    let sibling_y = self.viewport_y(sibling_layout.y + sibling_layout.yo);
+                    // If sibling is below viewport, we have hidden siblings
+                    if sibling_y >= self.area.height as i32 {
+                        has_siblings_below = true;
+                        break;
+                    }
+                }
+            }
+        }
+
         // Draw top corner
         if let Some(top_layout) = self.layout.nodes.get(&top_child) {
             let top_py = self.viewport_y(top_layout.y + top_layout.yo);
@@ -279,12 +353,13 @@ impl<'a> ConnectionRenderer<'a> {
             }
         }
 
-        // Draw bottom corner
+        // Draw bottom corner or BOTTOM_TEE if there are siblings below
         if let Some(bottom_layout) = self.layout.nodes.get(&bottom_child) {
             let bot_py = self.viewport_y(bottom_layout.y + bottom_layout.yo);
             if self.is_in_bounds(vert_x, bot_py) {
+                let bottom_char = if has_siblings_below { "┴──" } else { "╰──" };
                 self.canvas
-                    .draw_text(vert_x as usize, bot_py as usize, "╰──");
+                    .draw_text(vert_x as usize, bot_py as usize, bottom_char);
             }
         }
 
