@@ -53,7 +53,27 @@ impl<'a> ViewCalculator<'a> {
 
         // Use the absolute position from the layout
         let world_y = node_layout.y + node_layout.yo;
-        let screen_x = (node_layout.x - self.app.viewport_left).max(0.0) as u16;
+
+        // Determine offset based on node depth and sibling situation
+        let x_offset = if let Some(parent_id) = node_id.ancestors(&self.app.tree).nth(1) {
+            // This node has a parent
+            let siblings = self.get_visible_children(parent_id);
+            if siblings.len() > 1 {
+                // Node is part of a multi-child group
+                if self.app.root_id == Some(parent_id) {
+                    // Direct child of root with siblings needs 1 char for space after junction
+                    1.0
+                } else {
+                    // Grandchild or deeper with siblings needs 2 chars for junction + space
+                    2.0
+                }
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        };
+        let screen_x = (node_layout.x - self.app.viewport_left + x_offset).max(0.0) as u16;
         let ideal_screen_y = (world_y - self.app.viewport_top) as i32;
 
         let height = node_layout.lh as u16;

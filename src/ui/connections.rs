@@ -57,6 +57,7 @@ impl<'a> ConnectionRenderer<'a> {
             self.draw_collapsed_indicator(parent_exit_x, parent_exit_y, has_hidden);
         } else if !visible_children.is_empty() {
             self.draw_child_connections(
+                node_id,
                 parent_exit_x,
                 parent_exit_y,
                 &visible_children,
@@ -77,6 +78,7 @@ impl<'a> ConnectionRenderer<'a> {
 
     fn draw_child_connections(
         &mut self,
+        parent_node_id: NodeId,
         parent_x: i32,
         parent_y: i32,
         children: &[NodeId],
@@ -149,6 +151,7 @@ impl<'a> ConnectionRenderer<'a> {
             // 4. Draw connectors from spine to each child
             for (i, child_id) in children.iter().enumerate() {
                 let child_view = self.view_map.get(child_id).unwrap();
+                let child_x = child_view.screen_rect.x as i32;
                 let child_y = child_view.connection_y as i32;
 
                 // Use junction constants
@@ -158,9 +161,27 @@ impl<'a> ConnectionRenderer<'a> {
                     _ => junction::MIDDLE_LEFT,
                 };
 
-                // Draw junction character with explicit spacing
-                self.draw_text(spine_x, child_y, &junction_char.to_string());
-                self.draw_text(spine_x + 1, child_y, " ");
+                // Check if this is a direct child of root
+                let is_root_child = self.app.root_id == Some(parent_node_id);
+
+                if is_root_child {
+                    // For direct children of root, junction is at the spine
+                    self.canvas.set_char(spine_x as usize, child_y as usize, junction_char);
+                    // Always draw a space after the junction
+                    self.canvas.set_char((spine_x + 1) as usize, child_y as usize, ' ');
+                    // Draw horizontal line from after the space to before the text
+                    for x in (spine_x + 2)..child_x {
+                        self.canvas.set_char(x as usize, child_y as usize, '─');
+                    }
+                } else {
+                    // For grandchildren and deeper, junction is 2 chars before text
+                    self.draw_text(child_x - 2, child_y, &junction_char.to_string());
+                    self.draw_text(child_x - 1, child_y, " ");
+                    // Draw horizontal line from spine to junction if there's a gap
+                    for x in spine_x..(child_x - 2) {
+                        self.canvas.set_char(x as usize, child_y as usize, '─');
+                    }
+                }
             }
         }
     }
@@ -190,7 +211,6 @@ impl<'a> ConnectionRenderer<'a> {
             }
         }
     }
-
 
     fn draw_vertical_line(&mut self, x: i32, y1: i32, y2: i32, ch: char) {
         if x >= 0 && x < self.area.width as i32 {

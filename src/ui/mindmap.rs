@@ -20,10 +20,7 @@ pub struct MindMapRenderer<'a> {
 
 impl<'a> MindMapRenderer<'a> {
     pub fn new(app: &'a AppState, _layout: &'a LayoutEngine, view_map: &'a ViewMap) -> Self {
-        Self {
-            app,
-            view_map,
-        }
+        Self { app, view_map }
     }
 
     pub fn render(&self, frame: &mut Frame, area: Rect) {
