@@ -1,9 +1,10 @@
 ---
 source: tests/snapshot_test.rs
+assertion_line: 82
 expression: terminal.backend()
 ---
 "                                                                                "
-"                   ╭ Features  [+]                                              "
+"                   ╭ Features [+]                                               "
 "                   │                                                            "
 " Mind Map Root ────┤                  ╭ model.rs                                "
 "                   ╰ Architecture ────┤                                         "

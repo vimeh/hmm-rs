@@ -47,9 +47,36 @@ impl<'a> ConnectionRenderer<'a> {
             .cloned()
             .collect();
 
-        let has_hidden = all_children.len() != visible_children.len();
+        // Check if any children are actually hidden (not just collapsed)
+        let has_hidden = if node.is_collapsed {
+            // When collapsed, check if any children are hidden nodes
+            all_children.iter().any(|child_id| {
+                self.app
+                    .tree
+                    .get(*child_id)
+                    .map(|n| n.get().is_hidden())
+                    .unwrap_or(false)
+            })
+        } else {
+            // When expanded, check if visible children != all non-hidden children
+            let non_hidden_count = all_children
+                .iter()
+                .filter(|child_id| {
+                    !self
+                        .app
+                        .tree
+                        .get(**child_id)
+                        .map(|n| n.get().is_hidden())
+                        .unwrap_or(false)
+                })
+                .count();
+            visible_children.len() != non_hidden_count
+        };
 
-        let parent_exit_x = (parent_view.screen_rect.x + parent_view.screen_rect.width) as i32;
+        // Use the original width for connection point, not the visible width
+        // This ensures connections align with the actual end of the text, even if clipped
+        let parent_exit_x = (parent_view.screen_rect.x + parent_view.original_width
+            - parent_view.left_clip as u16) as i32;
         let parent_exit_y = parent_view.connection_y as i32;
 
         // --- Simplified Drawing Logic ---

@@ -55,8 +55,21 @@ impl<'a> MindMapRenderer<'a> {
             let x = view_node.screen_rect.x as usize;
             let y = view_node.screen_rect.y as usize;
             let width = view_node.screen_rect.width as usize;
+            let left_clip = view_node.left_clip;
 
-            let lines = TextWrapper::wrap(&node.title, width);
+            // If text is clipped, adjust what we display
+            let text_to_display = if left_clip > 0 {
+                // Skip the first `left_clip` characters
+                if left_clip < node.title.len() {
+                    &node.title[left_clip..]
+                } else {
+                    ""
+                }
+            } else {
+                &node.title
+            };
+
+            let lines = TextWrapper::wrap(text_to_display, width);
             for (i, line) in lines.iter().enumerate() {
                 canvas.draw_styled_text(x, y + i, line, style);
             }
