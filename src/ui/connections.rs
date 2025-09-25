@@ -223,8 +223,7 @@ impl<'a> ConnectionRenderer<'a> {
         let y = parent_middle_y.min(child_middle_y);
         let py = y - self.app.viewport_top as i32;
         if self.is_in_bounds(x, py) {
-            self.canvas
-                .draw_text(x as usize, py as usize, line);
+            self.canvas.draw_text(x as usize, py as usize, line);
         }
 
         // Draw vertical connection if needed
@@ -362,11 +361,12 @@ impl<'a> ConnectionRenderer<'a> {
             let top_py = self.viewport_y(adjusted_y);
             if self.is_in_bounds(vert_x, top_py) {
                 // Check if this is truly the first child in the tree structure
-                let is_first_child = if let Some(parent) = self.app.tree.get(top_child).and_then(|n| n.parent()) {
-                    parent.children(&self.app.tree).next() == Some(top_child)
-                } else {
-                    true
-                };
+                let is_first_child =
+                    if let Some(parent) = self.app.tree.get(top_child).and_then(|n| n.parent()) {
+                        parent.children(&self.app.tree).next() == Some(top_child)
+                    } else {
+                        true
+                    };
 
                 let connector = if is_first_child && top_py == 0 {
                     // This is a sticky first child at the top
@@ -379,7 +379,8 @@ impl<'a> ConnectionRenderer<'a> {
                 } else {
                     "├──"
                 };
-                self.canvas.draw_text(vert_x as usize, top_py as usize, connector);
+                self.canvas
+                    .draw_text(vert_x as usize, top_py as usize, connector);
             }
         }
 
@@ -421,9 +422,9 @@ impl<'a> ConnectionRenderer<'a> {
 
         let existing = self.canvas.char_buffer[y as usize][x as usize];
         let replacement = match existing {
-            '│' => junction::MIDDLE_RIGHT,
-            '╭' => junction::TOP_TEE,
-            '├' => junction::CROSS,
+            junction::VERTICAL => junction::MIDDLE_RIGHT,
+            junction::TOP_CORNER => junction::TOP_TEE,
+            junction::MIDDLE_LEFT => junction::CROSS,
             _ => existing,
         };
         self.canvas.set_char(x as usize, y as usize, replacement);
