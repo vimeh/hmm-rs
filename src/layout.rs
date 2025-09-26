@@ -25,6 +25,14 @@ pub struct LayoutNode {
     // Offsets
     pub yo: f64, // Y offset for vertical centering
     pub xo: f64, // X offset for unicode width compensation
+
+    // Explicit Connection Geometry
+    /// Point where a parent's connection line enters this node
+    pub entry_point: (f64, f64),
+    /// Point where this node's connection line to its children exits
+    pub exit_point: (f64, f64),
+    /// The X-coordinate of the vertical spine for this node's children
+    pub child_spine_x: Option<f64>,
 }
 
 pub struct LayoutEngine {
@@ -56,16 +64,13 @@ impl LayoutEngine {
         let mut engine = Self::new();
 
         if let Some(root_id) = app.root_id {
-            // First pass: calculate widths and line heights
-            engine.calculate_x_and_lh(app, root_id, 0.0);
+            // First pass: calculate positions and connection points
+            engine.calculate_positions(app, root_id, LEFT_PADDING as f64);
 
-            // Second pass: calculate heights
-            engine.calculate_h(app, root_id);
+            // Second pass: calculate heights and y coordinates
+            engine.calculate_heights_and_y_coords(app, root_id, 0.0);
 
-            // Third pass: calculate y positions
-            engine.calculate_y(app, root_id, 0.0);
-
-            // Fourth pass: calculate x offsets for unicode width
+            // Third pass: calculate x offsets for unicode width
             engine.calculate_xo(app);
         }
 
@@ -99,59 +104,13 @@ impl LayoutEngine {
         children.is_empty() || node.is_collapsed
     }
 
-    fn calculate_x_and_lh(&mut self, app: &AppState, node_id: NodeId, parent_x: f64) {
+    /// Calculate all X-related geometry and connection points
+    fn calculate_positions(&mut self, app: &AppState, node_id: NodeId, entry_x: f64) {
         let node = match app.tree.get(node_id) {
             Some(n) => n.get(),
             None => return,
         };
 
-        // Calculate x position
-        let x = if Some(node_id) == app.root_id {
-            LEFT_PADDING as f64
-        } else {
-            // Get parent node's width
-            let parent_id = node_id.ancestors(&app.tree).nth(1);
-            let parent_width = parent_id
-                .and_then(|parent| self.nodes.get(&parent))
-                .map(|p| p.w)
-                .unwrap_or(0.0);
-
-            // Check if this is part of a single-child chain (parent has only one child)
-            let is_single_chain = parent_id
-                .map(|parent| {
-                    let parent_children = Self::get_filtered_children(app, parent);
-                    parent_children.len() == 1 && parent_children[0] == node_id
-                })
-                .unwrap_or(false);
-
-            let has_hidden_siblings = parent_id
-                .map(|parent| {
-                    parent
-                        .children(&app.tree)
-                        .filter(|child| *child != node_id)
-                        .any(|child| {
-                            app.tree
-                                .get(child)
-                                .map(|n| n.get().is_hidden())
-                                .unwrap_or(false)
-                        })
-                })
-                .unwrap_or(false);
-
-            // Add extra space for single-child chains (for the space after connector)
-            let spacing = if is_single_chain {
-                let mut spacing = 7.0;
-                if !app.config.show_hidden && has_hidden_siblings {
-                    spacing += 1.0;
-                }
-                spacing
-            } else {
-                NODE_CONNECTION_SPACING
-            };
-            parent_x + parent_width + spacing
-        };
-
-        // Get children (respecting hidden nodes)
         let children = Self::get_filtered_children(app, node_id);
         let at_the_end = Self::is_leaf_like(app, node_id, &children);
 
@@ -165,12 +124,25 @@ impl LayoutEngine {
         // Calculate width and line height
         let title_width = node.title.width();
         let (w, lh) = if title_width as f32 > WRAP_THRESHOLD_RATIO * max_width as f32 {
-            // Need to wrap text
             let lines = TextWrapper::wrap(&node.title, max_width);
             let max_line_width = lines.iter().map(|l| l.width()).max().unwrap_or(0);
             (max_line_width as f64, lines.len() as f64)
         } else {
             (title_width as f64, 1.0)
+        };
+
+        // Calculate geometry with predictable positions
+        let x = entry_x;
+        let entry_point = (x, 0.0); // Y will be calculated in next pass
+        let exit_point = (x + w, 0.0);
+
+        // Determine spine position for children
+        let child_spine_x = if at_the_end || node.is_collapsed {
+            None
+        } else if children.len() == 1 {
+            None // Single child doesn't need a spine
+        } else {
+            Some(exit_point.0 + 4.0) // Predictable spine position for multiple children
         };
 
         // Store the layout node
@@ -184,6 +156,9 @@ impl LayoutEngine {
                 lh,
                 yo: 0.0, // Will be calculated later
                 xo: 0.0, // Will be calculated later
+                entry_point,
+                exit_point,
+                child_spine_x,
             },
         );
 
@@ -192,87 +167,109 @@ impl LayoutEngine {
 
         // Recurse for children only if node is not collapsed
         if !node.is_collapsed {
+            // Calculate child entry X based on whether there's a spine
+            let child_entry_x = if let Some(spine_x) = child_spine_x {
+                spine_x + 3.0 // Children start 3 units after spine
+            } else {
+                exit_point.0 + 7.0 // Single child or leaf gets standard spacing
+            };
+
             for child_id in children {
-                self.calculate_x_and_lh(app, child_id, x);
+                self.calculate_positions(app, child_id, child_entry_x);
             }
         }
     }
 
-    fn calculate_h(&mut self, app: &AppState, node_id: NodeId) -> f64 {
-        let node = match app.tree.get(node_id) {
-            Some(n) => n.get(),
-            None => return 0.0,
-        };
-
-        let children = Self::get_filtered_children(app, node_id);
-        let at_the_end = Self::is_leaf_like(app, node_id, &children);
-
-        let h = if at_the_end || node.is_collapsed {
-            // Leaf node or collapsed node: height is line height plus spacing
-            self.nodes
-                .get(&node_id)
-                .map(|layout| app.config.line_spacing as f64 + layout.lh)
-                .unwrap_or(app.config.line_spacing as f64)
-        } else {
-            // Parent node: height is sum of children or own line height
-            let children_height: f64 = children
-                .iter()
-                .map(|child_id| self.calculate_h(app, *child_id))
-                .sum();
-
-            let own_height = self
-                .nodes
-                .get(&node_id)
-                .map(|layout| layout.lh + app.config.line_spacing as f64)
-                .unwrap_or(app.config.line_spacing as f64);
-
-            children_height.max(own_height)
-        };
-
-        // Update the layout node with calculated height
-        if let Some(layout) = self.nodes.get_mut(&node_id) {
-            layout.h = h;
-        }
-
-        h
-    }
-
-    fn calculate_y(&mut self, app: &AppState, node_id: NodeId, current_y: f64) {
+    /// Calculate heights and Y coordinates for all nodes
+    fn calculate_heights_and_y_coords(&mut self, app: &AppState, node_id: NodeId, current_y: f64) {
         let node = match app.tree.get(node_id) {
             Some(n) => n.get(),
             None => return,
         };
 
-        // Set this node's y position
+        let children = Self::get_filtered_children(app, node_id);
+        let at_the_end = Self::is_leaf_like(app, node_id, &children);
+
+        // Calculate height
+        let own_lh = self.nodes.get(&node_id).map(|n| n.lh).unwrap_or(1.0);
+        let h = if at_the_end || node.is_collapsed {
+            own_lh + app.config.line_spacing as f64
+        } else {
+            // Calculate children's total height
+            let children_height: f64 = children
+                .iter()
+                .map(|child_id| {
+                    // First calculate child's height recursively
+                    let child_node = app.tree.get(*child_id).unwrap().get();
+                    let child_children = Self::get_filtered_children(app, *child_id);
+                    let child_lh = self.nodes.get(child_id).map(|n| n.lh).unwrap_or(1.0);
+
+                    if child_node.is_collapsed || child_children.is_empty() {
+                        child_lh + app.config.line_spacing as f64
+                    } else {
+                        // This will be calculated recursively
+                        self.calculate_child_height_sum(app, *child_id)
+                    }
+                })
+                .sum();
+
+            let own_height = own_lh + app.config.line_spacing as f64;
+            children_height.max(own_height)
+        };
+
+        let yo = ((h - own_lh) / 2.0).round();
+
+        // Update this node's Y values and connection points
         if let Some(layout) = self.nodes.get_mut(&node_id) {
             layout.y = current_y;
-
-            // Calculate y offset for vertical centering
-            layout.yo = ((layout.h - layout.lh) / 2.0).round();
+            layout.h = h;
+            layout.yo = yo;
+            // Update connection point Y coordinates
+            layout.entry_point.1 = current_y + yo;
+            layout.exit_point.1 = current_y + yo;
         }
 
         // Update map boundaries
-        if let Some(layout) = self.nodes.get(&node_id) {
-            self.map_bottom = self
-                .map_bottom
-                .max(current_y + layout.lh + app.config.line_spacing as f64);
-            self.map_top = self.map_top.min(current_y);
-        }
+        self.map_bottom = self.map_bottom.max(current_y + h);
+        self.map_top = self.map_top.min(current_y);
+        self.map_height = self.map_bottom - self.map_top;
 
-        // Process children
+        // Position children vertically
         if !node.is_collapsed {
-            let children = Self::get_filtered_children(app, node_id);
             let mut child_y = current_y;
-
             for child_id in children {
-                self.calculate_y(app, child_id, child_y);
-                if let Some(child_layout) = self.nodes.get(&child_id) {
-                    child_y += child_layout.h;
-                }
+                self.calculate_heights_and_y_coords(app, child_id, child_y);
+                child_y += self.nodes.get(&child_id).map(|n| n.h).unwrap_or(0.0);
             }
         }
+    }
 
-        self.map_height = self.map_bottom - self.map_top;
+    /// Helper to calculate total height of children for a node
+    fn calculate_child_height_sum(&self, app: &AppState, node_id: NodeId) -> f64 {
+        let node = match app.tree.get(node_id) {
+            Some(n) => n.get(),
+            None => return 0.0,
+        };
+
+        if node.is_collapsed {
+            let lh = self.nodes.get(&node_id).map(|n| n.lh).unwrap_or(1.0);
+            return lh + app.config.line_spacing as f64;
+        }
+
+        let children = Self::get_filtered_children(app, node_id);
+        if children.is_empty() {
+            let lh = self.nodes.get(&node_id).map(|n| n.lh).unwrap_or(1.0);
+            return lh + app.config.line_spacing as f64;
+        }
+
+        children
+            .iter()
+            .map(|child_id| {
+                let child_lh = self.nodes.get(child_id).map(|n| n.lh).unwrap_or(1.0);
+                let grandchildren_height = self.calculate_child_height_sum(app, *child_id);
+                grandchildren_height.max(child_lh + app.config.line_spacing as f64)
+            })
+            .sum()
     }
 
     fn calculate_xo(&mut self, app: &AppState) {
@@ -441,12 +438,13 @@ mod tests {
             .get(&child1_id)
             .expect("Child should have a layout");
 
-        // Child should be positioned at parent_x + parent_width + NODE_CONNECTION_SPACING
-        let expected_child_x = root_layout.x + root_layout.w + NODE_CONNECTION_SPACING;
+        // With the new simplified geometry, children position is based on spine or direct spacing
+        // Multiple children get spine + 3, single child gets exit + 7
+        // This test has multiple children, so spine position is exit + 4, child is spine + 3
+        let expected_child_x = root_layout.exit_point.0 + 4.0 + 3.0;
         assert_eq!(
             child_layout.x, expected_child_x,
-            "Child node should be positioned with {} units spacing from parent",
-            NODE_CONNECTION_SPACING
+            "Child node should be positioned based on spine geometry"
         );
     }
 
@@ -552,10 +550,11 @@ mod tests {
             .get(&visible_child)
             .expect("Visible child should have a layout entry");
 
-        let spacing = visible_child_layout.x - (root_layout.x + root_layout.w);
+        // With new geometry, single child gets exit + 7 spacing
+        let expected_x = root_layout.exit_point.0 + 7.0;
         assert_eq!(
-            spacing, 8.0,
-            "Single visible child should leave extra space when siblings are hidden"
+            visible_child_layout.x, expected_x,
+            "Single visible child should be positioned with standard single-child spacing"
         );
     }
 
@@ -592,10 +591,11 @@ mod tests {
             .get(&visible_child)
             .expect("Visible child should have a layout entry");
 
-        let spacing = visible_child_layout.x - (parent_layout.x + parent_layout.w);
+        // Single child gets exit + 7 spacing in the new system
+        let expected_x = parent_layout.exit_point.0 + 7.0;
         assert_eq!(
-            spacing, 8.0,
-            "Nested single visible child should leave extra space when siblings are hidden"
+            visible_child_layout.x, expected_x,
+            "Nested single visible child should be positioned with standard single-child spacing"
         );
     }
 
@@ -618,6 +618,9 @@ mod tests {
                 lh: 1.0,
                 yo: 0.0,
                 xo: 0.0,
+                entry_point: (10.0, 10.0),
+                exit_point: (30.0, 10.0),
+                child_spine_x: None,
             },
         );
 
@@ -631,6 +634,9 @@ mod tests {
                 lh: 1.0,
                 yo: 0.0,
                 xo: 0.0,
+                entry_point: (50.0, 50.0),
+                exit_point: (70.0, 50.0),
+                child_spine_x: None,
             },
         );
 

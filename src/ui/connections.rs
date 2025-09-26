@@ -47,46 +47,25 @@ impl<'a> ConnectionRenderer<'a> {
             .cloned()
             .collect();
 
-        // Check if any children are actually hidden (not just collapsed)
-        let hidden_child_count = all_children
-            .iter()
-            .filter(|child_id| {
+        // Check if any children are hidden
+        let has_hidden = all_children.len() != visible_children.len()
+            || all_children.iter().any(|child_id| {
                 self.app
                     .tree
-                    .get(**child_id)
+                    .get(*child_id)
                     .map(|n| n.get().is_hidden())
                     .unwrap_or(false)
-            })
-            .count();
+            });
 
-        let has_hidden = if node.is_collapsed {
-            // Collapsed node just needs to know if any direct children are hidden
-            hidden_child_count > 0
-        } else {
-            // Expanded node needs to flag connections when some children are hidden
-            let non_hidden_count = all_children.len() - hidden_child_count;
-            hidden_child_count > 0 || visible_children.len() != non_hidden_count
-        };
+        let parent_exit_x = parent_view.exit_point.0 as i32;
+        let parent_exit_y = parent_view.exit_point.1 as i32;
 
-        // Use the original width for connection point, not the visible width
-        // This ensures connections align with the actual end of the text, even if clipped
-        let parent_exit_x = (parent_view.screen_rect.x + parent_view.original_width
-            - parent_view.left_clip as u16) as i32;
-        let parent_exit_y = parent_view.connection_y as i32;
-
-        // --- Simplified Drawing Logic ---
+        // Simplified drawing logic using pre-calculated points
         if node.is_collapsed && !all_children.is_empty() {
             self.draw_collapsed_indicator(parent_exit_x, parent_exit_y, has_hidden);
         } else if !visible_children.is_empty() {
-            self.draw_child_connections(
-                node_id,
-                parent_exit_x,
-                parent_exit_y,
-                &visible_children,
-                has_hidden,
-            );
+            self.draw_child_connections(parent_view, &visible_children, has_hidden);
         } else if has_hidden {
-            // Only hidden children
             self.draw_hidden_only_indicator(parent_exit_x, parent_exit_y);
         }
 
@@ -100,150 +79,94 @@ impl<'a> ConnectionRenderer<'a> {
 
     fn draw_child_connections(
         &mut self,
-        parent_node_id: NodeId,
-        parent_x: i32,
-        parent_y: i32,
+        parent_view: &crate::ui::view::ViewNode,
         children: &[NodeId],
         has_hidden: bool,
     ) {
-        if children.len() == 1 {
-            // Single child - draw simple horizontal line
-            let child_view = self.view_map.get(&children[0]).unwrap();
-            let child_x = child_view.screen_rect.x as i32;
-            let child_y = child_view.connection_y as i32;
+        let parent_exit_x = parent_view.exit_point.0 as i32;
+        let parent_exit_y = parent_view.exit_point.1 as i32;
 
+        if children.len() == 1 {
+            // Single child - draw direct connection
+            let child_view = self.view_map.get(&children[0]).unwrap();
+            let child_entry_x = child_view.entry_point.0 as i32;
+            let child_entry_y = child_view.entry_point.1 as i32;
+
+            // Draw horizontal line from parent exit to child entry
             let connector = if has_hidden {
                 connections::SINGLE_HIDDEN
             } else {
                 connections::SINGLE
             };
+            self.draw_text(parent_exit_x, parent_exit_y, " ");
+            self.draw_text(parent_exit_x + 1, parent_exit_y, connector);
 
-            // Draw connector with proper spacing
-            // The layout will handle the spacing for single-child chains
-            let mut connector_chars: Vec<char> = connector.chars().collect();
-            if !has_hidden {
-                if child_y < parent_y {
-                    eprintln!(
-                        "single above parent: parent_x={} parent_y={} child_x={} child_y={}",
-                        parent_x, parent_y, child_x, child_y
-                    );
-                    for ch in connector_chars.iter_mut() {
-                        *ch = ' ';
-                    }
-                    if let Some(last) = connector_chars.last_mut() {
-                        *last = junction::TOP_CORNER;
-                    }
-                } else if child_y > parent_y {
-                    if let Some(last) = connector_chars.last_mut() {
-                        *last = junction::BOTTOM_CORNER;
-                    }
-                } else {
-                    for ch in connector_chars.iter_mut() {
-                        *ch = ' ';
-                    }
-                    if let Some(last) = connector_chars.last_mut() {
-                        *last = junction::TOP_CORNER;
-                    }
-                }
-            }
-
-            let connector_text: String = connector_chars.into_iter().collect();
-            let baseline_y = parent_y.min(child_y);
-            eprintln!(
-                "connector_text='{}' baseline_y={} parent_y={} child_y={}",
-                connector_text, baseline_y, parent_y, child_y
-            );
-            self.draw_text(parent_x, baseline_y, " ");
-            self.draw_text(parent_x + 1, baseline_y, &connector_text);
-
-            // Draw vertical connection if needed
-            if (parent_y - child_y).abs() > 0 {
-                let spine_x = child_x - 2;
+            // If vertical alignment differs, draw vertical connector
+            if parent_exit_y != child_entry_y {
+                let spine_x = child_entry_x - 2;
                 self.draw_vertical_line(
                     spine_x,
-                    parent_y.min(child_y),
-                    parent_y.max(child_y),
+                    parent_exit_y.min(child_entry_y),
+                    parent_exit_y.max(child_entry_y),
                     junction::VERTICAL,
                 );
-
-                // Draw corners
-                let corner = if child_y > parent_y {
-                    junction::BOTTOM_CORNER
-                } else {
-                    junction::TOP_CORNER
-                };
-                self.canvas
-                    .set_char(spine_x as usize, child_y as usize, corner);
-
-                let opposite_corner = if child_y > parent_y {
-                    junction::TOP_CORNER
-                } else {
-                    junction::BOTTOM_CORNER
-                };
-                let opposite_y = parent_y.max(child_y);
-                self.canvas
-                    .set_char(spine_x as usize, opposite_y as usize, opposite_corner);
+                self.canvas.set_char(
+                    spine_x as usize,
+                    child_entry_y as usize,
+                    if child_entry_y > parent_exit_y {
+                        junction::BOTTOM_CORNER
+                    } else {
+                        junction::TOP_CORNER
+                    },
+                );
             }
-        } else {
-            // Multiple children
-            let first_child_view = self.view_map.get(&children[0]).unwrap();
-            let last_child_view = self.view_map.get(children.last().unwrap()).unwrap();
+        } else if let Some(spine_x) = parent_view.child_spine_x {
+            // Multiple children - use the pre-calculated spine position
+            let spine_x = spine_x as i32;
 
-            // 1. Draw horizontal line from parent to the spine
+            // Draw horizontal from parent to spine
             let connector = if has_hidden {
                 connections::MULTI_HIDDEN
             } else {
                 connections::MULTI
             };
-            self.draw_text(parent_x, parent_y, " "); // Add space after parent text
-            self.draw_text(parent_x + 1, parent_y, connector); // Draw connector after the space
+            self.draw_text(parent_exit_x, parent_exit_y, " ");
+            self.draw_text(parent_exit_x + 1, parent_exit_y, connector);
+            self.draw_horizontal_line(
+                parent_exit_x + 1 + connector.len() as i32,
+                spine_x,
+                parent_exit_y,
+                '─',
+            );
 
-            let spine_x = parent_x + 1 + connector.chars().count() as i32; // Account for the space
-            let spine_start_y = first_child_view.connection_y as i32;
-            let spine_end_y = last_child_view.connection_y as i32;
+            // Draw vertical spine
+            let first_child_y = self.view_map.get(&children[0]).unwrap().entry_point.1 as i32;
+            let last_child_y = self
+                .view_map
+                .get(children.last().unwrap())
+                .unwrap()
+                .entry_point
+                .1 as i32;
+            self.draw_vertical_line(spine_x, first_child_y, last_child_y, junction::VERTICAL);
 
-            // 2. Draw vertical spine
-            self.draw_vertical_line(spine_x, spine_start_y, spine_end_y, junction::VERTICAL);
+            // Fix junction at parent connection
+            self.fix_junction(spine_x, parent_exit_y, junction::MIDDLE_RIGHT);
 
-            // 3. Draw junction from parent to spine
-            self.fix_junction(spine_x, parent_y, junction::MIDDLE_RIGHT);
-
-            // 4. Draw connectors from spine to each child
+            // Draw connections from spine to each child
             for (i, child_id) in children.iter().enumerate() {
                 let child_view = self.view_map.get(child_id).unwrap();
-                let child_x = child_view.screen_rect.x as i32;
-                let child_y = child_view.connection_y as i32;
+                let child_entry_x = child_view.entry_point.0 as i32;
+                let child_entry_y = child_view.entry_point.1 as i32;
 
-                // Use junction constants
                 let junction_char = match i {
                     0 => junction::TOP_CORNER,
                     n if n == children.len() - 1 => junction::BOTTOM_CORNER,
                     _ => junction::MIDDLE_LEFT,
                 };
 
-                // Check if this is a direct child of root
-                let is_root_child = self.app.root_id == Some(parent_node_id);
-
-                if is_root_child {
-                    // For direct children of root, junction is at the spine
-                    self.canvas
-                        .set_char(spine_x as usize, child_y as usize, junction_char);
-                    // Always draw a space after the junction
-                    self.canvas
-                        .set_char((spine_x + 1) as usize, child_y as usize, ' ');
-                    // Draw horizontal line from after the space to before the text
-                    for x in (spine_x + 2)..child_x {
-                        self.canvas.set_char(x as usize, child_y as usize, '─');
-                    }
-                } else {
-                    // For grandchildren and deeper, junction is 2 chars before text
-                    self.draw_text(child_x - 2, child_y, &junction_char.to_string());
-                    self.draw_text(child_x - 1, child_y, " ");
-                    // Draw horizontal line from spine to junction if there's a gap
-                    for x in spine_x..(child_x - 2) {
-                        self.canvas.set_char(x as usize, child_y as usize, '─');
-                    }
-                }
+                // Draw horizontal from spine to child
+                self.draw_horizontal_line(spine_x, child_entry_x, child_entry_y, '─');
+                self.fix_junction(spine_x, child_entry_y, junction_char);
             }
         }
     }
@@ -278,6 +201,16 @@ impl<'a> ConnectionRenderer<'a> {
         if x >= 0 && x < self.area.width as i32 {
             for y in min(y1, y2)..=max(y1, y2) {
                 if y >= 0 && y < self.area.height as i32 {
+                    self.canvas.set_char(x as usize, y as usize, ch);
+                }
+            }
+        }
+    }
+
+    fn draw_horizontal_line(&mut self, x1: i32, x2: i32, y: i32, ch: char) {
+        if y >= 0 && y < self.area.height as i32 {
+            for x in min(x1, x2)..=max(x1, x2) {
+                if x >= 0 && x < self.area.width as i32 {
                     self.canvas.set_char(x as usize, y as usize, ch);
                 }
             }
