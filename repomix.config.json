@@ -32,7 +32,8 @@
     "useDefaultPatterns": true,
     "customPatterns": [
       "tests/",
-      "docs/"
+      "docs/",
+      "src/actions/"
     ]
   },
   "security": {
