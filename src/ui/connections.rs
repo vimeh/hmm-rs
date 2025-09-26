@@ -120,8 +120,41 @@ impl<'a> ConnectionRenderer<'a> {
 
             // Draw connector with proper spacing
             // The layout will handle the spacing for single-child chains
-            self.draw_text(parent_x, parent_y.min(child_y), " ");
-            self.draw_text(parent_x + 1, parent_y.min(child_y), connector);
+            let mut connector_chars: Vec<char> = connector.chars().collect();
+            if !has_hidden {
+                if child_y < parent_y {
+                    eprintln!(
+                        "single above parent: parent_x={} parent_y={} child_x={} child_y={}",
+                        parent_x, parent_y, child_x, child_y
+                    );
+                    for ch in connector_chars.iter_mut() {
+                        *ch = ' ';
+                    }
+                    if let Some(last) = connector_chars.last_mut() {
+                        *last = junction::TOP_CORNER;
+                    }
+                } else if child_y > parent_y {
+                    if let Some(last) = connector_chars.last_mut() {
+                        *last = junction::BOTTOM_CORNER;
+                    }
+                } else {
+                    for ch in connector_chars.iter_mut() {
+                        *ch = ' ';
+                    }
+                    if let Some(last) = connector_chars.last_mut() {
+                        *last = junction::TOP_CORNER;
+                    }
+                }
+            }
+
+            let connector_text: String = connector_chars.into_iter().collect();
+            let baseline_y = parent_y.min(child_y);
+            eprintln!(
+                "connector_text='{}' baseline_y={} parent_y={} child_y={}",
+                connector_text, baseline_y, parent_y, child_y
+            );
+            self.draw_text(parent_x, baseline_y, " ");
+            self.draw_text(parent_x + 1, baseline_y, &connector_text);
 
             // Draw vertical connection if needed
             if (parent_y - child_y).abs() > 0 {
@@ -142,13 +175,14 @@ impl<'a> ConnectionRenderer<'a> {
                 self.canvas
                     .set_char(spine_x as usize, child_y as usize, corner);
 
-                let top_corner = if child_y > parent_y {
+                let opposite_corner = if child_y > parent_y {
                     junction::TOP_CORNER
                 } else {
                     junction::BOTTOM_CORNER
                 };
+                let opposite_y = parent_y.max(child_y);
                 self.canvas
-                    .set_char(spine_x as usize, parent_y.min(child_y) as usize, top_corner);
+                    .set_char(spine_x as usize, opposite_y as usize, opposite_corner);
             }
         } else {
             // Multiple children

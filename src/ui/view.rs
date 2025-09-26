@@ -89,12 +89,29 @@ impl<'a> ViewCalculator<'a> {
         };
 
         // Adjust screen position and visible width
-        let screen_x = relative_x.max(0.0) as u16;
+        let mut screen_x = relative_x.max(0.0) as u16;
         let visible_width = (node_layout.w - left_clip).max(0.0) as u16;
 
         let ideal_screen_y = (world_y - self.app.viewport_top) as i32;
         let height = node_layout.lh as u16;
         let final_screen_y = self.get_adjusted_y(node_id, ideal_screen_y, height);
+
+        if let Some(parent_id) = node_id.ancestors(&self.app.tree).nth(1) {
+            let siblings = self.get_visible_children(parent_id);
+            if siblings.len() == 1 {
+                if let Some(parent_view) = self.view_map.get(&parent_id) {
+                    let parent_baseline = parent_view.connection_y as i32;
+                    let parent_exit_x = parent_view.screen_rect.x + parent_view.original_width
+                        - parent_view.left_clip as u16;
+                    let offset_from_exit = screen_x as i32 - parent_exit_x as i32;
+                    if parent_baseline >= final_screen_y
+                        && (0..=6).contains(&offset_from_exit)
+                    {
+                        screen_x = screen_x.saturating_add(1);
+                    }
+                }
+            }
+        }
 
         let screen_rect = Rect::new(screen_x, final_screen_y as u16, visible_width, height);
 
@@ -104,7 +121,11 @@ impl<'a> ViewCalculator<'a> {
                 node_id,
                 ViewNode {
                     screen_rect,
-                    connection_y: screen_rect.y + height / 2, // Middle of the node for connections
+                    connection_y: if Some(node_id) == self.app.root_id {
+                        screen_rect.y + height / 2
+                    } else {
+                        screen_rect.y
+                    },
                     left_clip: left_clip as usize,
                     original_width: node_layout.w as u16,
                 },

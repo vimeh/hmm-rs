@@ -31,6 +31,11 @@ impl BufferCanvas {
     pub fn draw_styled_text(&mut self, x: usize, y: usize, text: &str, style: Style) {
         for (i, ch) in text.chars().enumerate() {
             if self.in_bounds(x + i, y) {
+                if ch == ' ' && self.char_buffer[y][x + i] != ' ' {
+                    // Preserve existing connector characters when writing spaces
+                    continue;
+                }
+
                 self.char_buffer[y][x + i] = ch;
                 self.style_buffer[y][x + i] = style;
             }
