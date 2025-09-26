@@ -24,7 +24,6 @@ pub struct LayoutNode {
     pub lh: f64, // Line height (number of text lines)
     // Offsets
     pub yo: f64, // Y offset for vertical centering
-    pub xo: f64, // X offset for unicode width compensation
 
     // Explicit Connection Geometry
     /// Point where a parent's connection line enters this node
@@ -68,10 +67,11 @@ impl LayoutEngine {
             engine.calculate_positions(app, root_id, LEFT_PADDING as f64);
 
             // Second pass: calculate heights and y coordinates
-            engine.calculate_heights_and_y_coords(app, root_id, 0.0);
+            let total_height = engine.calculate_heights_and_y_coords(app, root_id, 0.0);
 
-            // Third pass: calculate x offsets for unicode width
-            engine.calculate_xo(app);
+            // Update map dimensions
+            engine.map_height = total_height;
+            engine.map_bottom = total_height;
         }
 
         engine
@@ -155,7 +155,6 @@ impl LayoutEngine {
                 h: 0.0, // Will be calculated later
                 lh,
                 yo: 0.0, // Will be calculated later
-                xo: 0.0, // Will be calculated later
                 entry_point,
                 exit_point,
                 child_spine_x,
@@ -180,108 +179,55 @@ impl LayoutEngine {
         }
     }
 
-    /// Calculate heights and Y coordinates for all nodes
-    fn calculate_heights_and_y_coords(&mut self, app: &AppState, node_id: NodeId, current_y: f64) {
-        let node = match app.tree.get(node_id) {
-            Some(n) => n.get(),
-            None => return,
-        };
-
-        let children = Self::get_filtered_children(app, node_id);
-        let at_the_end = Self::is_leaf_like(app, node_id, &children);
-
-        // Calculate height
-        let own_lh = self.nodes.get(&node_id).map(|n| n.lh).unwrap_or(1.0);
-        let h = if at_the_end || node.is_collapsed {
-            own_lh + app.config.line_spacing as f64
-        } else {
-            // Calculate children's total height
-            let children_height: f64 = children
-                .iter()
-                .map(|child_id| {
-                    // First calculate child's height recursively
-                    let child_node = app.tree.get(*child_id).unwrap().get();
-                    let child_children = Self::get_filtered_children(app, *child_id);
-                    let child_lh = self.nodes.get(child_id).map(|n| n.lh).unwrap_or(1.0);
-
-                    if child_node.is_collapsed || child_children.is_empty() {
-                        child_lh + app.config.line_spacing as f64
-                    } else {
-                        // This will be calculated recursively
-                        self.calculate_child_height_sum(app, *child_id)
-                    }
-                })
-                .sum();
-
-            let own_height = own_lh + app.config.line_spacing as f64;
-            children_height.max(own_height)
-        };
-
-        let yo = ((h - own_lh) / 2.0).round();
-
-        // Update this node's Y values and connection points
-        if let Some(layout) = self.nodes.get_mut(&node_id) {
-            layout.y = current_y;
-            layout.h = h;
-            layout.yo = yo;
-            // Update connection point Y coordinates
-            layout.entry_point.1 = current_y + yo;
-            layout.exit_point.1 = current_y + yo;
-        }
-
-        // Update map boundaries
-        self.map_bottom = self.map_bottom.max(current_y + h);
-        self.map_top = self.map_top.min(current_y);
-        self.map_height = self.map_bottom - self.map_top;
-
-        // Position children vertically
-        if !node.is_collapsed {
-            let mut child_y = current_y;
-            for child_id in children {
-                self.calculate_heights_and_y_coords(app, child_id, child_y);
-                child_y += self.nodes.get(&child_id).map(|n| n.h).unwrap_or(0.0);
-            }
-        }
-    }
-
-    /// Helper to calculate total height of children for a node
-    fn calculate_child_height_sum(&self, app: &AppState, node_id: NodeId) -> f64 {
+    /// Calculate heights and Y coordinates using post-order traversal
+    fn calculate_heights_and_y_coords(
+        &mut self,
+        app: &AppState,
+        node_id: NodeId,
+        start_y: f64,
+    ) -> f64 {
         let node = match app.tree.get(node_id) {
             Some(n) => n.get(),
             None => return 0.0,
         };
 
-        if node.is_collapsed {
-            let lh = self.nodes.get(&node_id).map(|n| n.lh).unwrap_or(1.0);
-            return lh + app.config.line_spacing as f64;
-        }
-
         let children = Self::get_filtered_children(app, node_id);
-        if children.is_empty() {
-            let lh = self.nodes.get(&node_id).map(|n| n.lh).unwrap_or(1.0);
-            return lh + app.config.line_spacing as f64;
-        }
+        let own_lh = self.nodes.get(&node_id).map(|n| n.lh).unwrap_or(1.0);
+        let line_spacing = app.config.line_spacing as f64;
 
-        children
-            .iter()
-            .map(|child_id| {
-                let child_lh = self.nodes.get(child_id).map(|n| n.lh).unwrap_or(1.0);
-                let grandchildren_height = self.calculate_child_height_sum(app, *child_id);
-                grandchildren_height.max(child_lh + app.config.line_spacing as f64)
-            })
-            .sum()
-    }
-
-    fn calculate_xo(&mut self, app: &AppState) {
-        // Calculate x offset to compensate for unicode width differences
-        for (node_id, layout) in self.nodes.iter_mut() {
-            if let Some(node_ref) = app.tree.get(*node_id) {
-                let node = node_ref.get();
-                let title_len = node.title.len();
-                let title_width = node.title.width();
-                layout.xo = (title_len - title_width) as f64;
+        // Post-order traversal: Process children first to get their total height
+        let mut children_total_height = 0.0;
+        if !node.is_collapsed && !children.is_empty() {
+            for child_id in &children {
+                let child_height = self.calculate_heights_and_y_coords(
+                    app,
+                    *child_id,
+                    start_y + children_total_height,
+                );
+                children_total_height += child_height;
             }
         }
+
+        // Calculate this node's height based on children or its own line height
+        let h = if children_total_height > 0.0 {
+            children_total_height.max(own_lh + line_spacing)
+        } else {
+            own_lh + line_spacing
+        };
+
+        let yo = ((h - own_lh) / 2.0).round();
+
+        // Update this node with its final geometry
+        if let Some(layout) = self.nodes.get_mut(&node_id) {
+            layout.y = start_y;
+            layout.h = h;
+            layout.yo = yo;
+            layout.entry_point.1 = start_y + yo;
+            layout.exit_point.1 = start_y + yo;
+        }
+
+        // Return this node's height for parent's calculation
+        h
     }
 
     pub fn get_visible_nodes(&self, viewport: (f64, f64, f64, f64)) -> Vec<NodeId> {
@@ -617,7 +563,6 @@ mod tests {
                 h: 10.0,
                 lh: 1.0,
                 yo: 0.0,
-                xo: 0.0,
                 entry_point: (10.0, 10.0),
                 exit_point: (30.0, 10.0),
                 child_spine_x: None,
@@ -633,7 +578,6 @@ mod tests {
                 h: 10.0,
                 lh: 1.0,
                 yo: 0.0,
-                xo: 0.0,
                 entry_point: (50.0, 50.0),
                 exit_point: (70.0, 50.0),
                 child_spine_x: None,

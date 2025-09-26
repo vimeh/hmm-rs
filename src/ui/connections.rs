@@ -87,12 +87,12 @@ impl<'a> ConnectionRenderer<'a> {
         let parent_exit_y = parent_view.exit_point.1 as i32;
 
         if children.len() == 1 {
-            // Single child - draw direct connection
+            // Single child - draw clean right-angle connection
             let child_view = self.view_map.get(&children[0]).unwrap();
             let child_entry_x = child_view.entry_point.0 as i32;
             let child_entry_y = child_view.entry_point.1 as i32;
 
-            // Draw horizontal line from parent exit to child entry
+            // Add visual indicator if there are hidden siblings
             let connector = if has_hidden {
                 connections::SINGLE_HIDDEN
             } else {
@@ -101,24 +101,49 @@ impl<'a> ConnectionRenderer<'a> {
             self.draw_text(parent_exit_x, parent_exit_y, " ");
             self.draw_text(parent_exit_x + 1, parent_exit_y, connector);
 
-            // If vertical alignment differs, draw vertical connector
+            // Define a corner point for clean right-angle connections
+            let corner_x = parent_exit_x + connector.len() as i32 + 1;
+
             if parent_exit_y != child_entry_y {
-                let spine_x = child_entry_x - 2;
+                // Draw right-angle connection when Y levels differ
+                // 1. Horizontal from parent to corner
+                self.draw_horizontal_line(
+                    corner_x,
+                    child_entry_x.min(corner_x + 3),
+                    parent_exit_y,
+                    '─',
+                );
+                // 2. Vertical line connecting the two levels
                 self.draw_vertical_line(
-                    spine_x,
+                    corner_x + 3,
                     parent_exit_y.min(child_entry_y),
                     parent_exit_y.max(child_entry_y),
                     junction::VERTICAL,
                 );
-                self.canvas.set_char(
-                    spine_x as usize,
-                    child_entry_y as usize,
+                // 3. Horizontal from corner to child
+                self.draw_horizontal_line(corner_x + 3, child_entry_x, child_entry_y, '─');
+                // 4. Fix corner junctions
+                self.fix_junction(
+                    corner_x + 3,
+                    parent_exit_y,
+                    if child_entry_y > parent_exit_y {
+                        junction::TOP_CORNER
+                    } else {
+                        junction::BOTTOM_CORNER
+                    },
+                );
+                self.fix_junction(
+                    corner_x + 3,
+                    child_entry_y,
                     if child_entry_y > parent_exit_y {
                         junction::BOTTOM_CORNER
                     } else {
                         junction::TOP_CORNER
                     },
                 );
+            } else {
+                // Simple straight line if on the same level
+                self.draw_horizontal_line(corner_x, child_entry_x, parent_exit_y, '─');
             }
         } else if let Some(spine_x) = parent_view.child_spine_x {
             // Multiple children - use the pre-calculated spine position
