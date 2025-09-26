@@ -11,6 +11,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     widgets::Paragraph,
 };
+use std::borrow::Cow;
 
 // Mind map renderer
 pub struct MindMapRenderer<'a> {
@@ -57,8 +58,27 @@ impl<'a> MindMapRenderer<'a> {
             let width = view_node.screen_rect.width as usize;
             let left_clip = view_node.left_clip;
 
+            let needs_hidden_gap = left_clip == 0
+                && !self.app.config.show_hidden
+                && node_id
+                    .ancestors(&self.app.tree)
+                    .nth(1)
+                    .map(|parent_id| {
+                        parent_id
+                            .children(&self.app.tree)
+                            .filter(|sibling| *sibling != *node_id)
+                            .any(|sibling| {
+                                self.app
+                                    .tree
+                                    .get(sibling)
+                                    .map(|n| n.get().title.starts_with("[HIDDEN] "))
+                                    .unwrap_or(false)
+                            })
+                    })
+                    .unwrap_or(false);
+
             // If text is clipped, adjust what we display
-            let text_to_display = if left_clip > 0 {
+            let base_text = if left_clip > 0 {
                 // Skip the first `left_clip` characters
                 if left_clip < node.title.len() {
                     &node.title[left_clip..]
@@ -69,7 +89,15 @@ impl<'a> MindMapRenderer<'a> {
                 &node.title
             };
 
-            let lines = TextWrapper::wrap(text_to_display, width);
+            let mut text_to_display: Cow<'_, str> = Cow::Borrowed(base_text);
+            if needs_hidden_gap && !base_text.is_empty() {
+                let mut with_space = String::with_capacity(base_text.len() + 1);
+                with_space.push(' ');
+                with_space.push_str(base_text);
+                text_to_display = Cow::Owned(with_space);
+            }
+
+            let lines = TextWrapper::wrap(text_to_display.as_ref(), width);
             for (i, line) in lines.iter().enumerate() {
                 canvas.draw_styled_text(x, y + i, line, style);
             }
