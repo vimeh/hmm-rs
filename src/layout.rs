@@ -137,10 +137,8 @@ impl LayoutEngine {
         let exit_point = (x + w, 0.0);
 
         // Determine spine position for children
-        let child_spine_x = if at_the_end || node.is_collapsed {
-            None
-        } else if children.len() == 1 {
-            None // Single child doesn't need a spine
+        let child_spine_x = if at_the_end || node.is_collapsed || children.len() == 1 {
+            None // No spine needed for leaf nodes, collapsed nodes, or single children
         } else {
             Some(exit_point.0 + 4.0) // Predictable spine position for multiple children
         };
