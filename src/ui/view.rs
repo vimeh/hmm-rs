@@ -284,4 +284,82 @@ mod tests {
             parent_view.screen_rect.x + parent_view.original_width - parent_view.left_clip as u16;
         assert_eq!(connection_x, 6); // screen_x(0) + original_width(11) - left_clip(5)
     }
+
+    #[test]
+    fn test_single_visible_child_spacing_with_hidden_sibling() {
+        let config = AppConfig::default();
+        let mut app = AppState::new(config);
+
+        let root = app.tree.new_node(Node::new("Root".to_string()));
+        let parent = app.tree.new_node(Node::new("Parent".to_string()));
+        let hidden_child = app.tree.new_node(Node::new("Hidden".to_string()));
+        let visible_child = app.tree.new_node(Node::new("Visible".to_string()));
+
+        root.append(parent, &mut app.tree);
+        parent.append(hidden_child, &mut app.tree);
+        parent.append(visible_child, &mut app.tree);
+
+        app.root_id = Some(root);
+
+        if let Some(node) = app.tree.get_mut(hidden_child) {
+            node.get_mut().title = "[HIDDEN] Hidden".to_string();
+        }
+
+        app.config.show_hidden = false;
+
+        let layout = LayoutEngine::calculate_layout(&app);
+        let area = Rect::new(0, 0, 80, 20);
+        let view_map = ViewCalculator::calculate(&app, &layout, area);
+
+        let parent_view = view_map
+            .get(&parent)
+            .expect("Parent should appear in view map");
+        let child_view = view_map
+            .get(&visible_child)
+            .expect("Child should appear in view map");
+
+        let parent_exit_x =
+            parent_view.screen_rect.x + parent_view.original_width - parent_view.left_clip as u16;
+        let spacing = child_view.screen_rect.x as i32 - parent_exit_x as i32;
+
+        assert_eq!(
+            spacing, 8,
+            "Visible child should be positioned with extra spacing when siblings are hidden"
+        );
+    }
+
+    #[test]
+    fn test_spacing_with_hidden_child_in_sample_tree() {
+        let config = AppConfig::default();
+        let mut app = AppState::new(config);
+
+        let root = app.tree.new_node(Node::new("Mind Map Root".to_string()));
+        let features = app.tree.new_node(Node::new("Features".to_string()));
+        let hidden_task = app
+            .tree
+            .new_node(Node::new("[HIDDEN] Secret Task".to_string()));
+        let visible_task = app.tree.new_node(Node::new("✗ Failed Task".to_string()));
+        let architecture = app.tree.new_node(Node::new("Architecture".to_string()));
+
+        root.append(features, &mut app.tree);
+        root.append(architecture, &mut app.tree);
+        features.append(hidden_task, &mut app.tree);
+        features.append(visible_task, &mut app.tree);
+
+        app.root_id = Some(root);
+        app.config.show_hidden = false;
+
+        let layout = LayoutEngine::calculate_layout(&app);
+        let area = Rect::new(0, 0, 80, 20);
+        let view_map = ViewCalculator::calculate(&app, &layout, area);
+
+        let features_view = view_map.get(&features).expect("Features should be visible");
+        let task_view = view_map.get(&visible_task).expect("Task should be visible");
+
+        let parent_exit_x = features_view.screen_rect.x + features_view.original_width
+            - features_view.left_clip as u16;
+        let spacing = task_view.screen_rect.x as i32 - parent_exit_x as i32;
+
+        assert_eq!(spacing, 7);
+    }
 }

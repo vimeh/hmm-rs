@@ -124,9 +124,27 @@ impl LayoutEngine {
                 })
                 .unwrap_or(false);
 
+            let has_hidden_siblings = parent_id
+                .map(|parent| {
+                    parent
+                        .children(&app.tree)
+                        .filter(|child| *child != node_id)
+                        .any(|child| {
+                            app.tree
+                                .get(child)
+                                .map(|n| n.get().is_hidden())
+                                .unwrap_or(false)
+                        })
+                })
+                .unwrap_or(false);
+
             // Add extra space for single-child chains (for the space after connector)
             let spacing = if is_single_chain {
-                7.0
+                let mut spacing = 7.0;
+                if !app.config.show_hidden && has_hidden_siblings {
+                    spacing += 1.0;
+                }
+                spacing
             } else {
                 NODE_CONNECTION_SPACING
             };
@@ -500,6 +518,84 @@ mod tests {
             spacing2, expected_spacing,
             "Spacing between child and grandchild should be {} units",
             expected_spacing
+        );
+    }
+
+    #[test]
+    fn test_single_child_spacing_with_hidden_sibling() {
+        let mut app = create_test_app();
+
+        // Hide the first child so only the second remains visible
+        let root_id = app.root_id.expect("Test app should have a root");
+        let mut children_iter = root_id.children(&app.tree);
+        let hidden_child = children_iter
+            .next()
+            .expect("Root should have a first child");
+        let visible_child = children_iter
+            .next()
+            .expect("Root should have a second child");
+
+        if let Some(node) = app.tree.get_mut(hidden_child) {
+            node.get_mut().title = "[HIDDEN] Child 1".to_string();
+        }
+
+        app.config.show_hidden = false;
+
+        let layout = LayoutEngine::calculate_layout(&app);
+
+        let root_layout = layout
+            .nodes
+            .get(&root_id)
+            .expect("Root should have a layout entry");
+        let visible_child_layout = layout
+            .nodes
+            .get(&visible_child)
+            .expect("Visible child should have a layout entry");
+
+        let spacing = visible_child_layout.x - (root_layout.x + root_layout.w);
+        assert_eq!(
+            spacing, 8.0,
+            "Single visible child should leave extra space when siblings are hidden"
+        );
+    }
+
+    #[test]
+    fn test_grandchild_spacing_with_hidden_sibling() {
+        let config = AppConfig::default();
+        let mut app = AppState::new(config);
+
+        let root = app.tree.new_node(Node::new("Root".to_string()));
+        let parent = app.tree.new_node(Node::new("Parent".to_string()));
+        let hidden_child = app.tree.new_node(Node::new("Hidden".to_string()));
+        let visible_child = app.tree.new_node(Node::new("Visible".to_string()));
+
+        root.append(parent, &mut app.tree);
+        parent.append(hidden_child, &mut app.tree);
+        parent.append(visible_child, &mut app.tree);
+
+        app.root_id = Some(root);
+
+        if let Some(node) = app.tree.get_mut(hidden_child) {
+            node.get_mut().title = "[HIDDEN] Hidden".to_string();
+        }
+
+        app.config.show_hidden = false;
+
+        let layout = LayoutEngine::calculate_layout(&app);
+
+        let parent_layout = layout
+            .nodes
+            .get(&parent)
+            .expect("Parent should have a layout entry");
+        let visible_child_layout = layout
+            .nodes
+            .get(&visible_child)
+            .expect("Visible child should have a layout entry");
+
+        let spacing = visible_child_layout.x - (parent_layout.x + parent_layout.w);
+        assert_eq!(
+            spacing, 8.0,
+            "Nested single visible child should leave extra space when siblings are hidden"
         );
     }
 

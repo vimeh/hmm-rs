@@ -48,29 +48,24 @@ impl<'a> ConnectionRenderer<'a> {
             .collect();
 
         // Check if any children are actually hidden (not just collapsed)
-        let has_hidden = if node.is_collapsed {
-            // When collapsed, check if any children are hidden nodes
-            all_children.iter().any(|child_id| {
+        let hidden_child_count = all_children
+            .iter()
+            .filter(|child_id| {
                 self.app
                     .tree
-                    .get(*child_id)
+                    .get(**child_id)
                     .map(|n| n.get().is_hidden())
                     .unwrap_or(false)
             })
+            .count();
+
+        let has_hidden = if node.is_collapsed {
+            // Collapsed node just needs to know if any direct children are hidden
+            hidden_child_count > 0
         } else {
-            // When expanded, check if visible children != all non-hidden children
-            let non_hidden_count = all_children
-                .iter()
-                .filter(|child_id| {
-                    !self
-                        .app
-                        .tree
-                        .get(**child_id)
-                        .map(|n| n.get().is_hidden())
-                        .unwrap_or(false)
-                })
-                .count();
-            visible_children.len() != non_hidden_count
+            // Expanded node needs to flag connections when some children are hidden
+            let non_hidden_count = all_children.len() - hidden_child_count;
+            hidden_child_count > 0 || visible_children.len() != non_hidden_count
         };
 
         // Use the original width for connection point, not the visible width
