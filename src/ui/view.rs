@@ -59,7 +59,8 @@ impl<'a> ViewCalculator<'a> {
 
         // Simple translation from world coordinates to screen coordinates
         let ideal_screen_x = node_layout.x - self.app.viewport_left;
-        let ideal_screen_y = (node_layout.y - self.app.viewport_top) as i32;
+        // Use y + yo to get the actual text position (vertically centered)
+        let ideal_screen_y = ((node_layout.y + node_layout.yo) - self.app.viewport_top) as i32;
         let final_screen_y = self.get_adjusted_y(node_id, ideal_screen_y, node_layout.lh as u16);
 
         // Calculate clipping

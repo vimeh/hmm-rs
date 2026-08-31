@@ -66,12 +66,8 @@ impl LayoutEngine {
             // First pass: calculate positions and connection points
             engine.calculate_positions(app, root_id, LEFT_PADDING as f64);
 
-            // Second pass: calculate heights and y coordinates
-            let total_height = engine.calculate_heights_and_y_coords(app, root_id, 0.0);
-
-            // Update map dimensions
-            engine.map_height = total_height;
-            engine.map_bottom = total_height;
+            // Second pass: calculate heights and y positions in a single post-order traversal
+            engine.calculate_height_and_position(app, root_id, 0.0);
         }
 
         engine
@@ -140,7 +136,7 @@ impl LayoutEngine {
         let child_spine_x = if at_the_end || node.is_collapsed || children.len() == 1 {
             None // No spine needed for leaf nodes, collapsed nodes, or single children
         } else {
-            Some(exit_point.0 + 4.0) // Predictable spine position for multiple children
+            Some(exit_point.0 + 5.0) // Spine is 5 units after parent exit (space + 4 dashes)
         };
 
         // Store the layout node
@@ -166,9 +162,9 @@ impl LayoutEngine {
         if !node.is_collapsed {
             // Calculate child entry X based on whether there's a spine
             let child_entry_x = if let Some(spine_x) = child_spine_x {
-                spine_x + 3.0 // Children start 3 units after spine
+                spine_x + 2.0 // Children start 2 units after spine (junction + space)
             } else {
-                exit_point.0 + 7.0 // Single child or leaf gets standard spacing
+                exit_point.0 + 6.0 // Single child gets 6 units spacing
             };
 
             for child_id in children {
@@ -177,54 +173,61 @@ impl LayoutEngine {
         }
     }
 
-    /// Calculate heights and Y coordinates using post-order traversal
-    fn calculate_heights_and_y_coords(
-        &mut self,
-        app: &AppState,
-        node_id: NodeId,
-        start_y: f64,
-    ) -> f64 {
+    /// Single post-order traversal to calculate height and Y position for a node and its children
+    fn calculate_height_and_position(&mut self, app: &AppState, node_id: NodeId, y: f64) -> f64 {
         let node = match app.tree.get(node_id) {
             Some(n) => n.get(),
             None => return 0.0,
         };
 
         let children = Self::get_filtered_children(app, node_id);
-        let own_lh = self.nodes.get(&node_id).map(|n| n.lh).unwrap_or(1.0);
-        let line_spacing = app.config.line_spacing as f64;
+        let at_the_end = Self::is_leaf_like(app, node_id, &children);
 
-        // Post-order traversal: Process children first to get their total height
-        let mut children_total_height = 0.0;
-        if !node.is_collapsed && !children.is_empty() {
-            for child_id in &children {
-                let child_height = self.calculate_heights_and_y_coords(
-                    app,
-                    *child_id,
-                    start_y + children_total_height,
-                );
-                children_total_height += child_height;
-            }
-        }
-
-        // Calculate this node's height based on children or its own line height
-        let h = if children_total_height > 0.0 {
-            children_total_height.max(own_lh + line_spacing)
+        // Calculate height based on children (post-order)
+        let h = if at_the_end || node.is_collapsed {
+            // Leaf node or collapsed node: height is line height plus spacing
+            self.nodes
+                .get(&node_id)
+                .map(|layout| app.config.line_spacing as f64 + layout.lh)
+                .unwrap_or(app.config.line_spacing as f64)
         } else {
-            own_lh + line_spacing
+            // Parent node: recursively process children
+            let mut child_y = y;
+            let mut children_height = 0.0;
+
+            for child_id in &children {
+                // Recursively calculate child's height and position
+                let child_h = self.calculate_height_and_position(app, *child_id, child_y);
+                children_height += child_h;
+                child_y += child_h;
+            }
+
+            // Parent's height is max of children's total height or its own minimum height
+            let own_height = self
+                .nodes
+                .get(&node_id)
+                .map(|layout| layout.lh + app.config.line_spacing as f64)
+                .unwrap_or(app.config.line_spacing as f64);
+
+            children_height.max(own_height)
         };
 
-        let yo = ((h - own_lh) / 2.0).round();
-
-        // Update this node with its final geometry
+        // Update the layout node with calculated height and position
         if let Some(layout) = self.nodes.get_mut(&node_id) {
-            layout.y = start_y;
+            layout.y = y;
             layout.h = h;
-            layout.yo = yo;
-            layout.entry_point.1 = start_y + yo;
-            layout.exit_point.1 = start_y + yo;
+            layout.yo = ((h - layout.lh) / 2.0).round();
+
+            // Update connection point Y coordinates
+            layout.entry_point.1 = y + layout.yo;
+            layout.exit_point.1 = y + layout.yo;
         }
 
-        // Return this node's height for parent's calculation
+        // Update map boundaries
+        self.map_bottom = self.map_bottom.max(y + h);
+        self.map_top = self.map_top.min(y);
+        self.map_height = self.map_bottom - self.map_top;
+
         h
     }
 
@@ -449,8 +452,8 @@ mod tests {
         let spacing1 = child_layout.x - (root_layout.x + root_layout.w);
         let spacing2 = grandchild_layout.x - (child_layout.x + child_layout.w);
 
-        // Single-child chains now have extra spacing (7 instead of 6)
-        let expected_spacing = 7.0;
+        // Single-child chains have 6 units spacing
+        let expected_spacing = 6.0;
         assert_eq!(
             spacing1, expected_spacing,
             "Spacing between root and child should be {} units",
@@ -494,8 +497,8 @@ mod tests {
             .get(&visible_child)
             .expect("Visible child should have a layout entry");
 
-        // With new geometry, single child gets exit + 7 spacing
-        let expected_x = root_layout.exit_point.0 + 7.0;
+        // With new geometry, single child gets exit + 6 spacing
+        let expected_x = root_layout.exit_point.0 + 6.0;
         assert_eq!(
             visible_child_layout.x, expected_x,
             "Single visible child should be positioned with standard single-child spacing"
@@ -535,8 +538,8 @@ mod tests {
             .get(&visible_child)
             .expect("Visible child should have a layout entry");
 
-        // Single child gets exit + 7 spacing in the new system
-        let expected_x = parent_layout.exit_point.0 + 7.0;
+        // Single child gets exit + 6 spacing in the new system
+        let expected_x = parent_layout.exit_point.0 + 6.0;
         assert_eq!(
             visible_child_layout.x, expected_x,
             "Nested single visible child should be positioned with standard single-child spacing"

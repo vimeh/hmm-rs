@@ -101,49 +101,57 @@ impl<'a> ConnectionRenderer<'a> {
             self.draw_text(parent_exit_x, parent_exit_y, " ");
             self.draw_text(parent_exit_x + 1, parent_exit_y, connector);
 
-            // Define a corner point for clean right-angle connections
-            let corner_x = parent_exit_x + connector.len() as i32 + 1;
+            // Calculate key positions for robust right-angle connections
+            let horizontal_extend = connector.len() as i32 + 1;
+            let corner_x = parent_exit_x + horizontal_extend;
+            let vertical_line_x = corner_x + 3;
 
-            if parent_exit_y != child_entry_y {
-                // Draw right-angle connection when Y levels differ
-                // 1. Horizontal from parent to corner
-                self.draw_horizontal_line(
-                    corner_x,
-                    child_entry_x.min(corner_x + 3),
-                    parent_exit_y,
-                    '─',
-                );
-                // 2. Vertical line connecting the two levels
-                self.draw_vertical_line(
-                    corner_x + 3,
-                    parent_exit_y.min(child_entry_y),
-                    parent_exit_y.max(child_entry_y),
-                    junction::VERTICAL,
-                );
-                // 3. Horizontal from corner to child
-                self.draw_horizontal_line(corner_x + 3, child_entry_x, child_entry_y, '─');
-                // 4. Fix corner junctions
-                self.fix_junction(
-                    corner_x + 3,
-                    parent_exit_y,
-                    if child_entry_y > parent_exit_y {
-                        junction::TOP_CORNER
-                    } else {
-                        junction::BOTTOM_CORNER
-                    },
-                );
-                self.fix_junction(
-                    corner_x + 3,
-                    child_entry_y,
-                    if child_entry_y > parent_exit_y {
-                        junction::BOTTOM_CORNER
-                    } else {
-                        junction::TOP_CORNER
-                    },
-                );
+            // Determine if we need a vertical connection
+            let needs_vertical = parent_exit_y != child_entry_y;
+
+            if needs_vertical {
+                // Draw a clean right-angle connection with three segments:
+                // 1. Horizontal segment from parent to vertical line
+                if vertical_line_x > corner_x {
+                    self.draw_horizontal_line(corner_x, vertical_line_x, parent_exit_y, '─');
+                }
+
+                // 2. Vertical segment connecting the levels
+                let y_min = parent_exit_y.min(child_entry_y);
+                let y_max = parent_exit_y.max(child_entry_y);
+                self.draw_vertical_line(vertical_line_x, y_min, y_max, junction::VERTICAL);
+
+                // 3. Horizontal segment from vertical line to child (if needed)
+                if child_entry_x > vertical_line_x {
+                    self.draw_horizontal_line(
+                        vertical_line_x + 1,
+                        child_entry_x,
+                        child_entry_y,
+                        '─',
+                    );
+                }
+
+                // 4. Place junction characters at the corners
+                let top_junction = if child_entry_y > parent_exit_y {
+                    junction::TOP_CORNER
+                } else {
+                    junction::BOTTOM_CORNER
+                };
+                let bottom_junction = if child_entry_y > parent_exit_y {
+                    junction::BOTTOM_CORNER
+                } else {
+                    junction::TOP_CORNER
+                };
+
+                self.fix_junction(vertical_line_x, parent_exit_y, top_junction);
+                self.fix_junction(vertical_line_x, child_entry_y, bottom_junction);
             } else {
-                // Simple straight line if on the same level
-                self.draw_horizontal_line(corner_x, child_entry_x, parent_exit_y, '─');
+                // Same level - draw a simple horizontal connection
+                // Only draw up to the vertical line position for consistency
+                let end_x = vertical_line_x.min(child_entry_x);
+                if end_x > corner_x {
+                    self.draw_horizontal_line(corner_x, end_x, parent_exit_y, '─');
+                }
             }
         } else if let Some(spine_x) = parent_view.child_spine_x {
             // Multiple children - use the pre-calculated spine position
@@ -157,12 +165,15 @@ impl<'a> ConnectionRenderer<'a> {
             };
             self.draw_text(parent_exit_x, parent_exit_y, " ");
             self.draw_text(parent_exit_x + 1, parent_exit_y, connector);
-            self.draw_horizontal_line(
-                parent_exit_x + 1 + connector.len() as i32,
-                spine_x,
-                parent_exit_y,
-                '─',
-            );
+            // Only draw to spine if it's further than the connector
+            if spine_x > parent_exit_x + 1 + connector.len() as i32 {
+                self.draw_horizontal_line(
+                    parent_exit_x + 1 + connector.len() as i32,
+                    spine_x,
+                    parent_exit_y,
+                    '─',
+                );
+            }
 
             // Draw vertical spine
             let first_child_y = self.view_map.get(&children[0]).unwrap().entry_point.1 as i32;
@@ -189,9 +200,15 @@ impl<'a> ConnectionRenderer<'a> {
                     _ => junction::MIDDLE_LEFT,
                 };
 
-                // Draw horizontal from spine to child
-                self.draw_horizontal_line(spine_x, child_entry_x, child_entry_y, '─');
-                self.fix_junction(spine_x, child_entry_y, junction_char);
+                // Draw junction at spine
+                self.canvas
+                    .set_char(spine_x as usize, child_entry_y as usize, junction_char);
+
+                // Draw horizontal line from spine to child entry point (if there's a gap)
+                // The space immediately after the junction is provided by node positioning
+                if child_entry_x > spine_x + 2 {
+                    self.draw_horizontal_line(spine_x + 2, child_entry_x, child_entry_y, '─');
+                }
             }
         }
     }

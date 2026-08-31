@@ -3,10 +3,10 @@ source: tests/snapshot_test.rs
 expression: terminal.backend()
 ---
 "                                                                                "
-"                              ╭ Another extremely long      ╭ This grandchild al"
-"                              │ child node title that   ────╯ will test the wrap"
-" This is a very long root     │ exceeds normal width          tree structure    "
-" node title that should   ────┤ constraints and needs                           "
+"                              ╭ Another extremely long  ─────This grandchild als"
+"                              │ child node title that        will test the wrapp"
+" This is a very long root ────┤ exceeds normal width         tree structure     "
+" node title that should       │ constraints and needs                           "
 " wrap when displayed in       │ proper text wrapping to                         "
 " the terminal                 │ display correctly                               "
 "                              │                                                 "
